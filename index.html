@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autrau — локальный транскрибатор</title>
+  <style>
+    :root {
+      --bg: #0f1419; --card: #1a2027; --border: #2a3441;
+      --text: #e6e8eb; --muted: #8b95a5;
+      --accent: #4f9eff; --accent-2: #6ee7b7;
+      --error: #f87171; --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+      margin: 0; padding: 24px; line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; }
+    h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 600; }
+    .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 14px; }
+    .row { display: flex; gap: 14px; flex-wrap: wrap; }
+    .row > div { flex: 1 1 200px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    input[type="file"], input[type="text"], select {
+      width: 100%; padding: 9px 12px; background: #0d1117;
+      border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+      font-size: 14px; font-family: inherit;
+    }
+    input[type="file"] { padding: 7px; }
+    input[type="file"]::file-selector-button {
+      background: var(--accent); color: white; border: none;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; margin-right: 10px; font-weight: 600;
+    }
+    button {
+      background: var(--accent); color: white; border: none;
+      padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: transform 0.1s, background 0.15s;
+    }
+    button:hover:not(:disabled) { background: #3a8ae8; transform: translateY(-1px); }
+    button:active:not(:disabled) { transform: translateY(0); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    button.secondary:hover:not(:disabled) { background: #0d1117; }
+    button.danger { background: var(--error); }
+    button.tiny { padding: 5px 10px; font-size: 12px; }
+
+    /* progress bar */
+    .progress-section { margin-top: 18px; }
+    .progress-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .progress-title { font-size: 13px; color: var(--muted); }
+    .progress-pct { font-size: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .progress-track { width: 100%; height: 18px; background: #0d1117; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 0%; transition: width 0.2s ease; border-radius: 9px; box-shadow: 0 0 12px rgba(79, 158, 255, 0.4); }
+    .progress-fill.error { background: var(--error); }
+    .progress-stats { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .live { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 14px; max-height: 160px; overflow-y: auto; font-size: 14px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
+    textarea { width: 100%; min-height: 220px; padding: 14px; background: #0d1117; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.6; resize: vertical; }
+    .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+    .status.error { color: var(--error); } .status.success { color: var(--accent-2); } .status.warn { color: var(--warn); }
+    .small { font-size: 12px; color: var(--muted); }
+    .hidden { display: none !important; }
+    .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+    .actions .spacer { flex: 1; }
+    code { background: #0d1117; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+    /* provider cards */
+    .providers { display: grid; gap: 10px; }
+    .provider-card {
+      background: #0d1117; border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; cursor: pointer; transition: border-color 0.15s;
+    }
+    .provider-card:hover { border-color: #3a4a5a; }
+    .provider-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .provider-card.disabled { opacity: 0.55; cursor: not-allowed; }
+    .pname { font-weight: 700; font-size: 14px; }
+    .pdesc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .ptag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .ptag.ok { background: rgba(110, 231, 183, 0.15); color: var(--accent-2); }
+    .ptag.no { background: rgba(248, 113, 113, 0.15); color: var(--error); }
+    .ptag.gpu { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+
+    /* model list */
+    .model-list { margin-top: 12px; max-height: 220px; overflow-y: auto; }
+    .model-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; background: #0d1117; }
+    .model-row.active { border-color: var(--accent); }
+    .model-row .mname { font-weight: 600; font-size: 13px; flex: 1; }
+    .model-row .mdesc { font-size: 11px; color: var(--muted); }
+    .model-row .mstatus { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+    .mstatus.dl { background: rgba(110, 231, 183, 0.15); color: var(--accent-2); }
+    .mstatus.nodl { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+
+    /* updates */
+    .update-row { padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; font-size: 13px; }
+    .update-row:last-child { border-bottom: none; }
+    .update-row .utitle { flex: 1; }
+    .update-row .uwhen { color: var(--muted); font-size: 11px; }
+    .badge { display: inline-block; padding: 2px 8px; background: #0d1117; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; color: var(--muted); }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 8px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎙️ Autrau</h1>
+    <p class="subtitle">Локальная транскрибация аудио. Несколько провайдеров, обновления из коробки, всё на вашем ПК.</p>
+
+    <!-- Provider & model selection -->
+    <div class="card">
+      <h2>1. Провайдер и модель</h2>
+      <div id="providers" class="providers"></div>
+
+      <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button class="secondary" id="installProvider">⬇ Установить провайдер</button>
+        <button id="loadModel">⚙ Загрузить модель</button>
+        <span class="small" id="loadedStatus"></span>
+      </div>
+
+      <h2 style="margin-top: 18px;">Модели</h2>
+      <div class="model-list" id="modelList"><div class="small">выберите провайдера</div></div>
+    </div>
+
+    <!-- Transcription -->
+    <div class="card">
+      <h2>2. Транскрибация</h2>
+      <div class="row">
+        <div>
+          <label for="file">Аудиофайл</label>
+          <input type="file" id="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4,.aac">
+        </div>
+        <div>
+          <label for="lang">Язык</label>
+          <select id="lang">
+            <option value="ru" selected>Русский</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="it">Italiano</option>
+            <option value="pt">Português</option>
+            <option value="zh">中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="tr">Türkçe</option>
+            <option value="ar">العربية</option>
+            <option value="pl">Polski</option>
+            <option value="uk">Українська</option>
+            <option value="auto">Авто (определить)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <button id="transcribe" disabled>▶ Транскрибировать</button>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="progress-section hidden" id="progressSection">
+        <div class="progress-header">
+          <span class="progress-title" id="progressLabel">Обработка…</span>
+          <span class="progress-pct" id="progressPct">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-stats">
+          <span id="progressSubtitle">—</span>
+          <span id="progressDetail"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="liveCard">
+      <h2>Поток</h2>
+      <div class="live" id="liveText"></div>
+    </div>
+
+    <div class="card hidden" id="resultCard">
+      <h2>Результат</h2>
+      <textarea id="result" readonly placeholder="Здесь появится текст…"></textarea>
+      <div class="actions">
+        <button class="secondary" id="copy">📋 Скопировать</button>
+        <button class="secondary" id="download">💾 Скачать .txt</button>
+        <span class="spacer"></span>
+        <span class="small" id="stats"></span>
+      </div>
+    </div>
+
+    <!-- Diagnostics & updates -->
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" data-tab="updates">🔄 Обновления</div>
+        <div class="tab" data-tab="diag">🔧 Диагностика</div>
+      </div>
+
+      <div id="tab-updates">
+        <div class="actions" style="margin-bottom: 10px;">
+          <button class="secondary" id="checkUpdates">🔍 Проверить обновления</button>
+          <button class="secondary" id="applyAppUpdate">⬇ Обновить приложение</button>
+          <span class="spacer"></span>
+          <span class="small" id="updateStatus"></span>
+        </div>
+        <div id="updatesList"><div class="small">Нажмите «Проверить обновления»</div></div>
+      </div>
+
+      <div id="tab-diag" class="hidden">
+        <pre id="diagOut" style="background:#0d1117; padding:14px; border-radius:8px; overflow:auto; max-height:400px; font-size:12px; line-height:1.5;"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';  // same origin
+    const $ = (id) => document.getElementById(id);
+
+    // === state ===
+    const state = {
+      providers: [],
+      activeProvider: null,
+      activeModel: null,
+      loaded: { provider: null, model: null, device: null },
+    };
+
+    // ===== INIT =====
+    async function init() {
+      try {
+        const [provResp, cfgResp, healthResp] = await Promise.all([
+          fetch(API + '/api/providers'),
+          fetch(API + '/api/config'),
+          fetch(API + '/health'),
+        ]);
+        const prov = await provResp.json();
+        const cfg = await cfgResp.json();
+        const h = await healthResp.json();
+
+        state.providers = prov.providers;
+        state.activeProvider = prov.active.provider;
+        state.activeModel = prov.active.model;
+        state.loaded = h.loaded;
+        $('lang').value = cfg.language;
+
+        renderProviders();
+        renderModels();
+        updateLoadedStatus();
+        $('transcribe').disabled = !state.loaded.provider;
+      } catch (e) {
+        setStatus('⚠️ сервер не отвечает. Запустите start.bat', 'error');
+      }
+    }
+
+    // ===== PROVIDERS =====
+    function renderProviders() {
+      const html = state.providers.map(p => {
+        const tags = [];
+        if (p.requires_gpu) tags.push('<span class="ptag gpu">GPU</span>');
+        tags.push(p.installed
+          ? '<span class="ptag ok">✓ установлен</span>'
+          : '<span class="ptag no">✗ не установлен</span>');
+        return `
+          <div class="provider-card ${state.activeProvider === p.name ? 'active' : ''} ${!p.installed ? 'disabled' : ''}"
+               data-name="${p.name}">
+            <div class="pname">${p.display_name}${tags.join('')}</div>
+            <div class="pdesc">${p.description}</div>
+            ${!p.installed ? `<div class="small" style="color:var(--error); margin-top:6px;">${p.reason}</div>` : ''}
+            ${!p.installed ? `<div class="small" style="margin-top:4px;">💡 ${p.install_hint}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+      $('providers').innerHTML = html;
+      $('providers').querySelectorAll('.provider-card').forEach(el => {
+        el.addEventListener('click', () => {
+          const name = el.dataset.name;
+          const p = state.providers.find(x => x.name === name);
+          if (!p.installed) {
+            if (confirm(`Провайдер «${p.display_name}» не установлен.\n\n${p.install_hint}\n\nУстановить сейчас?`)) {
+              installProvider(name);
+            }
+            return;
+          }
+          state.activeProvider = name;
+          state.activeModel = p.default_model;
+          renderProviders();
+          renderModels();
+        });
+      });
+    }
+
+    async function installProvider(name) {
+      setStatus('⏳ Устанавливаю ' + name + ' …');
+      $('installProvider').disabled = true;
+      try {
+        const r = await fetch(API + '/api/provider/install', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: name }),
+        });
+        const j = await r.json();
+        if (j.ok) {
+          setStatus('✅ Установлено. Перезагрузите страницу.', 'success');
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          setStatus('❌ Ошибка установки. Смотрите консоль.', 'error');
+          console.error(j.log);
+        }
+      } catch (e) {
+        setStatus('❌ ' + e.message, 'error');
+      } finally {
+        $('installProvider').disabled = false;
+      }
+    }
+    $('installProvider').addEventListener('click', () => {
+      if (state.activeProvider) installProvider(state.activeProvider);
+    });
+
+    // ===== MODELS =====
+    function renderModels() {
+      const p = state.providers.find(x => x.name === state.activeProvider);
+      if (!p) { $('modelList').innerHTML = '<div class="small">провайдер не выбран</div>'; return; }
+      if (p.models.length === 0) { $('modelList').innerHTML = '<div class="small">нет моделей</div>'; return; }
+      const html = p.models.map(m => `
+        <div class="model-row ${state.activeModel === m.name ? 'active' : ''}" data-name="${m.name}">
+          <div style="flex:1;">
+            <div class="mname">${m.name} ${m.size_mb ? `<span class="badge">${m.size_mb >= 1000 ? (m.size_mb/1024).toFixed(1) + ' ГБ' : m.size_mb + ' МБ'}</span>` : ''}</div>
+            <div class="mdesc">${m.display || ''}</div>
+          </div>
+          <span class="mstatus ${m.downloaded ? 'dl' : 'nodl'}">${m.downloaded ? '✓ скачана' : 'не скачана'}</span>
+          <button class="tiny secondary" data-action="download">${m.downloaded ? '↻ обновить' : '⬇ скачать'}</button>
+        </div>
+      `).join('');
+      $('modelList').innerHTML = html;
+      $('modelList').querySelectorAll('.model-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          state.activeModel = row.dataset.name;
+          renderModels();
+        });
+        row.querySelector('[data-action="download"]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          downloadModel(state.activeProvider, row.dataset.name);
+        });
+      });
+    }
+
+    async function downloadModel(provider, model) {
+      setStatus('⏳ Скачиваю ' + model + ' …');
+      $('progressSection').classList.remove('hidden');
+      $('progressFill').style.width = '0%';
+      $('progressPct').textContent = '0%';
+      $('progressLabel').textContent = 'Скачивание модели';
+      $('progressDetail').textContent = `${provider} / ${model}`;
+      try {
+        const r = await fetch(API + '/api/model/download', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, model }),
+        });
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let sep;
+          while ((sep = buf.indexOf('\n\n')) !== -1) {
+            const raw = buf.slice(0, sep).trim();
+            buf = buf.slice(sep + 2);
+            if (!raw.startsWith('data:')) continue;
+            try {
+              const m = JSON.parse(raw.slice(5).trim());
+              if (m.type === 'progress' && m.percent >= 0) {
+                $('progressFill').style.width = m.percent + '%';
+                $('progressPct').textContent = m.percent + '%';
+                $('progressDetail').textContent = m.payload || '';
+              } else if (m.type === 'done') {
+                setStatus('✅ Модель скачана', 'success');
+                await init();
+              } else if (m.type === 'error') {
+                setStatus('❌ ' + m.payload, 'error');
+              }
+            } catch {}
+          }
+        }
+      } catch (e) {
+        setStatus('❌ ' + e.message, 'error');
+      }
+    }
+
+    // ===== LOAD MODEL =====
+    $('loadModel').addEventListener('click', async () => {
+      if (!state.activeProvider || !state.activeModel) {
+        setStatus('Выберите провайдера и модель', 'warn');
+        return;
+      }
+      $('loadModel').disabled = true;
+      setStatus('⏳ Загружаю модель в память …');
+      try {
+        const r = await fetch(API + '/api/provider/load', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: state.activeProvider,
+            model: state.activeModel,
+            device: 'cpu',
+          }),
+        });
+        const j = await r.json();
+        if (j.ok) {
+          state.loaded = j.loaded;
+          updateLoadedStatus();
+          $('transcribe').disabled = false;
+          setStatus('✅ Модель готова', 'success');
+        } else {
+          setStatus('❌ ' + (j.detail || JSON.stringify(j)), 'error');
+        }
+      } catch (e) {
+        setStatus('❌ ' + e.message, 'error');
+      } finally {
+        $('loadModel').disabled = false;
+      }
+    });
+
+    function updateLoadedStatus() {
+      const l = state.loaded;
+      $('loadedStatus').innerHTML = l.provider
+        ? `Загружено: <code>${l.provider}/${l.model}</code> · <code>${l.device}</code>`
+        : '<span class="small">в памяти ничего не загружено</span>';
+    }
+
+    // ===== TRANSCRIBE =====
+    $('transcribe').addEventListener('click', transcribe);
+    async function transcribe() {
+      const file = $('file').files[0];
+      if (!file) { setStatus('Выберите аудиофайл', 'error'); return; }
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('language', $('lang').value);
+      fd.append('provider', state.activeProvider);
+      fd.append('model', state.activeModel);
+
+      $('transcribe').disabled = true;
+      $('progressSection').classList.remove('hidden');
+      $('progressFill').style.width = '0%';
+      $('progressFill').classList.remove('error');
+      $('progressPct').textContent = '0%';
+      $('progressLabel').textContent = 'Загружаю файл…';
+      $('progressSubtitle').textContent = `${file.name} · ${(file.size/1024/1024).toFixed(1)} МБ`;
+      $('progressDetail').textContent = '';
+      $('liveCard').classList.add('hidden');
+      $('liveText').textContent = '';
+      $('resultCard').classList.add('hidden');
+      $('result').value = '';
+      $('stats').textContent = '';
+      setStatus('');
+
+      const start = Date.now();
+      try {
+        const resp = await fetch(API + '/transcribe', { method: 'POST', body: fd });
+        if (!resp.ok) {
+          const t = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${t.slice(0, 200)}`);
+        }
+        setStatus('🔄 Распознаю …');
+        $('progressLabel').textContent = 'Распознаю речь';
+        $('liveCard').classList.remove('hidden');
+
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '', acc = '', lastPct = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let sep;
+          while ((sep = buf.indexOf('\n\n')) !== -1) {
+            const raw = buf.slice(0, sep).trim();
+            buf = buf.slice(sep + 2);
+            if (!raw.startsWith('data:')) continue;
+            let m; try { m = JSON.parse(raw.slice(5).trim()); } catch { continue; }
+            if (m.type === 'progress') {
+              const p = Math.max(lastPct, m.percent || 0);
+              lastPct = p;
+              $('progressFill').style.width = p + '%';
+              $('progressPct').textContent = p + '%';
+              if (m.payload && m.payload.text) {
+                acc += (acc && !acc.endsWith(' ') ? ' ' : '') + m.payload.text;
+                $('liveText').textContent = acc;
+                $('liveText').scrollTop = $('liveText').scrollHeight;
+              }
+            } else if (m.type === 'done') {
+              $('progressFill').style.width = '100%';
+              $('progressPct').textContent = '100%';
+              const text = m.payload.text || acc;
+              $('result').value = text;
+              $('resultCard').classList.remove('hidden');
+              const e = ((Date.now() - start) / 1000).toFixed(1);
+              $('stats').textContent = `${text.length.toLocaleString('ru')} символов · ${e} с`;
+              setStatus('✅ Готово', 'success');
+              $('progressLabel').textContent = 'Готово';
+            } else if (m.type === 'error') {
+              throw new Error(m.payload);
+            }
+          }
+        }
+      } catch (e) {
+        setStatus('❌ ' + e.message, 'error');
+        $('progressFill').classList.add('error');
+        $('progressLabel').textContent = 'Ошибка';
+      } finally {
+        $('transcribe').disabled = !state.loaded.provider;
+      }
+    }
+
+    function setStatus(text, kind) {
+      const el = $('status');
+      el.textContent = text;
+      el.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    // ===== COPY / DOWNLOAD =====
+    $('copy').addEventListener('click', async () => {
+      $('result').select();
+      try { await navigator.clipboard.writeText($('result').value); } catch {}
+      const o = $('copy').textContent;
+      $('copy').textContent = '✓ Скопировано';
+      setTimeout(() => $('copy').textContent = o, 1500);
+    });
+    $('download').addEventListener('click', () => {
+      const b = new Blob([$('result').value], { type: 'text/plain;charset=utf-8' });
+      const u = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = u; a.download = 'transcript.txt'; a.click();
+      URL.revokeObjectURL(u);
+    });
+
+    // ===== TABS =====
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        const name = t.dataset.tab;
+        $('tab-updates').classList.toggle('hidden', name !== 'updates');
+        $('tab-diag').classList.toggle('hidden', name !== 'diag');
+        if (name === 'diag') runDiag();
+      });
+    });
+
+    async function runDiag() {
+      $('diagOut').textContent = 'проверяю …';
+      const r = await fetch(API + '/api/updates');
+      const j = await r.json();
+      $('diagOut').textContent = JSON.stringify(j, null, 2);
+    }
+
+    // ===== UPDATES =====
+    $('checkUpdates').addEventListener('click', checkUpdates);
+    async function checkUpdates() {
+      $('updateStatus').textContent = 'проверяю …';
+      $('checkUpdates').disabled = true;
+      try {
+        const r = await fetch(API + '/api/updates');
+        const j = await r.json();
+        renderUpdates(j);
+        $('updateStatus').textContent = 'готово';
+      } catch (e) {
+        $('updateStatus').textContent = 'ошибка: ' + e.message;
+      } finally {
+        $('checkUpdates').disabled = false;
+      }
+    }
+
+    function renderUpdates(j) {
+      const app = j.app || {};
+      const models = j.models || [];
+      const appRow = app.error
+        ? `<div class="update-row"><div class="utitle">⚠️ Ошибка проверки приложения</div><span class="uwhen">${app.error}</span></div>`
+        : `<div class="update-row">
+            <div class="utitle">📦 Приложение (autrau)
+              ${app.has_update ? '<span class="mstatus nodl">доступно обновление</span>' : '<span class="mstatus dl">актуально</span>'}
+            </div>
+            <span class="uwhen">${app.behind_by ? `отстаём на ${app.behind_by} коммитов` : (app.note || '')}</span>
+          </div>`;
+      const modelRows = models.map(m => {
+        if (m.error) return `<div class="update-row"><div class="utitle">⚠️ ${m.provider}/${m.model}</div><span class="uwhen">${m.error}</span></div>`;
+        const has = m.has_update;
+        return `<div class="update-row">
+          <div class="utitle">🧠 ${m.display || m.provider} · <code>${m.model}</code>
+            ${has ? '<span class="mstatus nodl">есть обновление</span>' : '<span class="mstatus dl">актуально</span>'}
+            ${m.local_exists ? '' : '<span class="mstatus nodl">не скачано</span>'}
+          </div>
+          <span class="uwhen">${m.last_modified ? new Date(m.last_modified).toLocaleDateString('ru') : ''}</span>
+        </div>`;
+      }).join('');
+      $('updatesList').innerHTML = appRow + modelRows;
+    }
+
+    $('applyAppUpdate').addEventListener('click', async () => {
+      if (!confirm('Обновить приложение? git pull + pip upgrade. Если есть локальные изменения — возможен конфликт.')) return;
+      $('updateStatus').textContent = 'обновляю …';
+      $('applyAppUpdate').disabled = true;
+      try {
+        const r = await fetch(API + '/api/updates/app', { method: 'POST' });
+        const j = await r.json();
+        $('updateStatus').textContent = j.app_pull?.ok ? '✅ готово, перезапустите сервер' : ('❌ ' + (j.app_pull?.detail?.stderr || '').slice(-200));
+      } catch (e) {
+        $('updateStatus').textContent = '❌ ' + e.message;
+      } finally {
+        $('applyAppUpdate').disabled = false;
+      }
+    });
+
+    // ===== BOOT =====
+    init();
+  </script>
+</body>
+</html>

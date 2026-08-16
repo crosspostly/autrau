@@ -1,0 +1,16 @@
+# Core (required)
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+python-multipart>=0.0.9
+huggingface-hub>=0.20
+
+# Default provider (installed by default)
+faster-whisper>=1.0,<2.0
+
+# Optional providers — installed on demand via the UI
+# whisper.cpp via pywhispercpp (CPU-only, very lightweight):
+#     pip install pywhispercpp
+#
+# Parakeet v3 (NVIDIA GPU + CUDA, SOTA 2025-2026):
+#     pip install -U nemo_toolkit[asr]
+# Note: nemo_toolkit pulls in torch (~2-3 GB) and has strict CUDA requirements.

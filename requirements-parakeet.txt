@@ -1,0 +1,8 @@
+# Optional — only for the Parakeet v3 provider.
+# This is a HEAVY install: PyTorch CUDA + NeMo (~3-5 GB total).
+# Requires NVIDIA GPU with up-to-date CUDA drivers.
+
+--extra-index-url https://pypi.nvidia.com
+
+torch>=2.1
+nemo_toolkit[asr]>=2.4
