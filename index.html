@@ -4,136 +4,507 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Autrau — локальный транскрибатор</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    /* ============================================================
+       Autrau design system
+       ============================================================ */
     :root {
-      --bg: #0f1419; --card: #1a2027; --border: #2a3441;
-      --text: #e6e8eb; --muted: #8b95a5;
-      --accent: #4f9eff; --accent-2: #6ee7b7;
-      --error: #f87171; --warn: #fbbf24;
+      --bg: #0b0d14;
+      --bg-2: #0f1220;
+      --card: rgba(26, 31, 46, 0.7);
+      --card-solid: #1a1f2e;
+      --card-2: #232938;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --text: #e8eaf0;
+      --text-dim: #a8b0c0;
+      --text-muted: #6b7388;
+      --accent: #ff8a65;
+      --accent-2: #ffb088;
+      --accent-3: #6ee7b7;
+      --accent-4: #60a5fa;
+      --accent-5: #c084fc;
+      --error: #f87171;
+      --warn: #fbbf24;
+      --shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+      --shadow-glow: 0 0 40px rgba(255, 138, 101, 0.15);
+      --radius: 16px;
+      --radius-sm: 10px;
     }
+
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: var(--bg); color: var(--text);
-      margin: 0; padding: 24px; line-height: 1.5;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      line-height: 1.55;
+      font-feature-settings: "ss01", "cv11";
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
-    .container { max-width: 960px; margin: 0 auto; }
-    h1 { font-size: 26px; margin: 0 0 4px; font-weight: 700; }
-    h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 600; }
-    .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 14px; }
+
+    /* Animated background — soft glowing blobs */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.18;
+      pointer-events: none;
+      z-index: 0;
+      animation: drift 22s ease-in-out infinite alternate;
+    }
+    body::before {
+      background: radial-gradient(circle, #ff8a65 0%, transparent 60%);
+      top: -200px; left: -200px;
+    }
+    body::after {
+      background: radial-gradient(circle, #c084fc 0%, transparent 60%);
+      bottom: -200px; right: -200px;
+      animation-delay: -8s;
+    }
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(80px, 60px) scale(1.15); }
+      100% { transform: translate(-60px, 40px) scale(0.95); }
+    }
+
+    .container { max-width: 980px; margin: 0 auto; padding: 32px 24px 80px; position: relative; z-index: 1; }
+
+    /* ============================================================
+       Brand header
+       ============================================================ */
+    .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
+    .brand-logo {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, #ff8a65 0%, #c084fc 100%);
+      border-radius: 12px;
+      display: grid; place-items: center;
+      box-shadow: 0 4px 24px rgba(255, 138, 101, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .brand-logo::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%);
+      animation: shine 3s ease-in-out infinite;
+    }
+    @keyframes shine { 0%, 100% { transform: translateX(-100%); } 50% { transform: translateX(100%); } }
+    .brand-logo svg { position: relative; z-index: 1; }
+    .brand-text { display: flex; flex-direction: column; }
+    .brand-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand-tag { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+    /* ============================================================
+       Hero
+       ============================================================ */
+    .hero { margin-bottom: 32px; }
+    .hero h1 {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800;
+      letter-spacing: -1.2px;
+      line-height: 1.1;
+      margin: 0 0 12px;
+      background: linear-gradient(180deg, #ffffff 0%, #a8b0c0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 15px; color: var(--text-dim);
+      max-width: 600px; margin: 0;
+    }
+    .hero .accent { color: var(--accent-2); font-weight: 600; }
+
+    /* ============================================================
+       Glass card
+       ============================================================ */
+    .card {
+      background: var(--card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--border-bright); }
+
+    .card h2 {
+      font-size: 13px;
+      margin: 0 0 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2 .num {
+      display: inline-grid; place-items: center;
+      width: 22px; height: 22px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-5));
+      color: white; font-size: 11px; font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    /* ============================================================
+       Form controls
+       ============================================================ */
     .row { display: flex; gap: 14px; flex-wrap: wrap; }
-    .row > div { flex: 1 1 200px; }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .row > div { flex: 1 1 220px; }
+    label {
+      display: block; font-size: 12px; color: var(--text-muted);
+      margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+    }
     input[type="file"], input[type="text"], select {
-      width: 100%; padding: 9px 12px; background: #0d1117;
-      border: 1px solid var(--border); border-radius: 8px; color: var(--text);
-      font-size: 14px; font-family: inherit;
+      width: 100%; padding: 11px 14px; background: rgba(13, 17, 23, 0.6);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-size: 14px; font-family: inherit;
+      transition: all 0.15s;
     }
-    input[type="file"] { padding: 7px; }
+    input[type="file"]:focus, input[type="text"]:focus, select:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 138, 101, 0.15);
+    }
+    input[type="file"] { padding: 9px; }
     input[type="file"]::file-selector-button {
-      background: var(--accent); color: white; border: none;
-      padding: 6px 12px; border-radius: 6px; cursor: pointer; margin-right: 10px; font-weight: 600;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; border: none; padding: 7px 14px; border-radius: 6px;
+      cursor: pointer; margin-right: 12px; font-weight: 600;
     }
+
+    /* Buttons */
     button {
-      background: var(--accent); color: white; border: none;
-      padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
-      cursor: pointer; transition: transform 0.1s, background 0.15s;
+      background: linear-gradient(135deg, var(--accent) 0%, #ff6b4a 100%);
+      color: white; border: none; padding: 11px 22px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; font-family: inherit;
+      box-shadow: 0 4px 14px rgba(255, 138, 101, 0.25);
     }
-    button:hover:not(:disabled) { background: #3a8ae8; transform: translateY(-1px); }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255, 138, 101, 0.4); }
     button:active:not(:disabled) { transform: translateY(0); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
-    button.secondary:hover:not(:disabled) { background: #0d1117; }
-    button.danger { background: var(--error); }
-    button.tiny { padding: 5px 10px; font-size: 12px; }
-
-    /* progress bar */
-    .progress-section { margin-top: 18px; }
-    .progress-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-    .progress-title { font-size: 13px; color: var(--muted); }
-    .progress-pct { font-size: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
-    .progress-track { width: 100%; height: 18px; background: #0d1117; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
-    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 0%; transition: width 0.2s ease; border-radius: 9px; box-shadow: 0 0 12px rgba(79, 158, 255, 0.4); }
-    .progress-fill.error { background: var(--error); }
-    .progress-stats { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
-
-    .live { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 14px; max-height: 160px; overflow-y: auto; font-size: 14px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
-    textarea { width: 100%; min-height: 220px; padding: 14px; background: #0d1117; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.6; resize: vertical; }
-    .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
-    .status.error { color: var(--error); } .status.success { color: var(--accent-2); } .status.warn { color: var(--warn); }
-    .small { font-size: 12px; color: var(--muted); }
-    .hidden { display: none !important; }
-    .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
-    .actions .spacer { flex: 1; }
-    code { background: #0d1117; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
-
-    /* provider cards */
-    .providers { display: grid; gap: 10px; }
-    .provider-card {
-      background: #0d1117; border: 1px solid var(--border); border-radius: 10px;
-      padding: 12px 14px; cursor: pointer; transition: border-color 0.15s;
+    button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+    button.secondary {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-bright);
+      color: var(--text);
+      box-shadow: none;
     }
-    .provider-card:hover { border-color: #3a4a5a; }
-    .provider-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-    .provider-card.disabled { opacity: 0.55; cursor: not-allowed; }
-    .pname { font-weight: 700; font-size: 14px; }
-    .pdesc { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    .ptag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .ptag.ok { background: rgba(110, 231, 183, 0.15); color: var(--accent-2); }
-    .ptag.no { background: rgba(248, 113, 113, 0.15); color: var(--error); }
-    .ptag.gpu { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+    button.secondary:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); box-shadow: none; }
+    button.tiny { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+    button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text-dim); box-shadow: none; }
+    button.ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.04); }
 
-    /* model list */
-    .model-list { margin-top: 12px; max-height: 220px; overflow-y: auto; }
-    .model-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; background: #0d1117; }
-    .model-row.active { border-color: var(--accent); }
-    .model-row .mname { font-weight: 600; font-size: 13px; flex: 1; }
-    .model-row .mdesc { font-size: 11px; color: var(--muted); }
-    .model-row .mstatus { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-    .mstatus.dl { background: rgba(110, 231, 183, 0.15); color: var(--accent-2); }
-    .mstatus.nodl { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+    /* ============================================================
+       Drop zone
+       ============================================================ */
+    .dropzone {
+      position: relative;
+      border: 2px dashed var(--border-bright);
+      border-radius: var(--radius);
+      padding: 32px 24px;
+      text-align: center;
+      transition: all 0.2s;
+      background: rgba(13, 17, 23, 0.3);
+      cursor: pointer;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(255, 138, 101, 0.05);
+      transform: scale(1.005);
+    }
+    .dropzone .dz-icon { font-size: 36px; margin-bottom: 8px; opacity: 0.7; }
+    .dropzone .dz-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .dropzone .dz-hint { font-size: 12px; color: var(--text-muted); }
+    .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .file-info {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px; background: rgba(110, 231, 183, 0.08);
+      border: 1px solid rgba(110, 231, 183, 0.2); border-radius: var(--radius-sm);
+      margin-top: 12px; font-size: 13px;
+    }
+    .file-info .fi-name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-info .fi-size { color: var(--text-muted); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
 
-    /* updates */
-    .update-row { padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; font-size: 13px; }
-    .update-row:last-child { border-bottom: none; }
-    .update-row .utitle { flex: 1; }
-    .update-row .uwhen { color: var(--muted); font-size: 11px; }
-    .badge { display: inline-block; padding: 2px 8px; background: #0d1117; border: 1px solid var(--border); border-radius: 12px; font-size: 11px; color: var(--muted); }
+    /* ============================================================
+       Providers
+       ============================================================ */
+    .providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .provider-card {
+      background: rgba(13, 17, 23, 0.5);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .provider-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 0%, var(--pcolor, transparent) 200%);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .provider-card:hover { border-color: var(--border-bright); }
+    .provider-card:hover::before { opacity: 0.05; }
+    .provider-card.active {
+      border-color: var(--pcolor, var(--accent));
+      box-shadow: 0 0 0 1px var(--pcolor, var(--accent)), 0 8px 24px -8px var(--pcolor, var(--accent));
+    }
+    .provider-card.disabled { opacity: 0.5; cursor: not-allowed; }
+    .pname { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; position: relative; }
+    .pname .pmark { width: 8px; height: 8px; border-radius: 50%; background: var(--pcolor, var(--accent)); box-shadow: 0 0 12px var(--pcolor, var(--accent)); }
+    .pdesc { font-size: 12px; color: var(--text-dim); margin-top: 6px; position: relative; line-height: 1.5; }
+    .ptag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; padding: 3px 8px; border-radius: 20px;
+      text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+      margin-left: auto; position: relative;
+    }
+    .ptag.ok { background: rgba(110, 231, 183, 0.12); color: var(--accent-3); }
+    .ptag.no { background: rgba(248, 113, 113, 0.12); color: var(--error); }
+    .ptag.gpu { background: rgba(192, 132, 252, 0.12); color: var(--accent-5); }
 
-    .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
-    .tab { padding: 8px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; }
+    /* ============================================================
+       Models list
+       ============================================================ */
+    .model-list { display: grid; gap: 8px; }
+    .model-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      background: rgba(13, 17, 23, 0.4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: all 0.15s;
+    }
+    .model-row:hover { border-color: var(--border-bright); background: rgba(13, 17, 23, 0.6); }
+    .model-row.active { border-color: var(--accent); background: rgba(255, 138, 101, 0.05); }
+    .mname { font-weight: 600; font-size: 13px; flex: 1; display: flex; align-items: center; gap: 8px; }
+    .mname code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .badge { padding: 2px 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; font-size: 10px; color: var(--text-muted); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+    .mstatus { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .mstatus.dl { background: rgba(110, 231, 183, 0.12); color: var(--accent-3); }
+    .mstatus.nodl { background: rgba(251, 191, 36, 0.12); color: var(--warn); }
+    .mstatus.update { background: rgba(255, 138, 101, 0.15); color: var(--accent); }
+
+    /* ============================================================
+       Progress + waveform
+       ============================================================ */
+    .progress-section {
+      margin-top: 20px;
+      padding: 18px;
+      background: rgba(13, 17, 23, 0.5);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .progress-left { display: flex; align-items: center; gap: 12px; }
+    .mic-icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid; place-items: center;
+      box-shadow: 0 0 20px rgba(255, 138, 101, 0.3);
+      transition: all 0.2s;
+    }
+    .mic-icon.transcribing { animation: pulse-mic 1.5s ease-in-out infinite; }
+    .mic-icon.done { background: linear-gradient(135deg, var(--accent-3), #34d399); box-shadow: 0 0 20px rgba(110, 231, 183, 0.4); }
+    .mic-icon.error { background: linear-gradient(135deg, var(--error), #dc2626); box-shadow: 0 0 20px rgba(248, 113, 113, 0.4); }
+    @keyframes pulse-mic {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 138, 101, 0.3); }
+      50% { transform: scale(1.08); box-shadow: 0 0 35px rgba(255, 138, 101, 0.55); }
+    }
+    .mic-icon svg { width: 18px; height: 18px; }
+    .progress-label { font-size: 14px; font-weight: 600; }
+    .progress-pct {
+      font-size: 28px; font-weight: 800; color: var(--accent-2);
+      font-variant-numeric: tabular-nums; letter-spacing: -1px;
+    }
+    .progress-track {
+      width: 100%; height: 8px; background: rgba(0, 0, 0, 0.4);
+      border-radius: 4px; overflow: hidden; margin-bottom: 14px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 50%, var(--accent-5) 100%);
+      width: 0%; transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(255, 138, 101, 0.5);
+    }
+    .progress-fill.error { background: var(--error); box-shadow: 0 0 12px rgba(248, 113, 113, 0.5); }
+    .progress-fill.done { background: linear-gradient(90deg, var(--accent-3), #34d399); box-shadow: 0 0 12px rgba(110, 231, 183, 0.5); }
+
+    /* Waveform */
+    .waveform {
+      width: 100%; height: 64px; border-radius: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      position: relative; overflow: hidden;
+    }
+    .waveform canvas { width: 100%; height: 100%; display: block; }
+    .waveform .wf-progress {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 0%;
+      background: rgba(255, 138, 101, 0.08);
+      border-right: 2px solid var(--accent);
+      transition: width 0.25s;
+    }
+
+    /* ============================================================
+       Live stream / result
+       ============================================================ */
+    .stream-card { position: relative; }
+    .live {
+      background: rgba(13, 17, 23, 0.6);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      font-family: 'Inter', sans-serif;
+    }
+    .live::after {
+      content: '▊'; color: var(--accent); animation: blink 1s steps(1) infinite;
+      margin-left: 2px;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    textarea {
+      width: 100%; min-height: 220px; padding: 16px;
+      background: rgba(13, 17, 23, 0.6);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.7;
+      resize: vertical; transition: all 0.15s;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 138, 101, 0.15); }
+
+    /* ============================================================
+       Status / actions
+       ============================================================ */
+    .status { font-size: 13px; color: var(--text-muted); margin-top: 10px; min-height: 18px; }
+    .status.error { color: var(--error); } .status.success { color: var(--accent-3); } .status.warn { color: var(--warn); }
+    .small { font-size: 12px; color: var(--text-muted); }
+    .hidden { display: none !important; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+    .actions .spacer { flex: 1; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0, 0, 0, 0.3); padding: 2px 8px; border-radius: 4px; }
+
+    /* ============================================================
+       Tabs
+       ============================================================ */
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .tab {
+      padding: 10px 16px; cursor: pointer; color: var(--text-muted);
+      border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600;
+      transition: all 0.15s;
+    }
+    .tab:hover { color: var(--text-dim); }
     .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .update-row {
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+      display: flex; gap: 12px; align-items: center; font-size: 13px;
+    }
+    .update-row:last-child { border-bottom: none; }
+    .update-row .utitle { flex: 1; display: flex; align-items: center; gap: 8px; }
+    .update-row .uwhen { color: var(--text-muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+
+    /* ============================================================
+       Responsive
+       ============================================================ */
+    @media (max-width: 640px) {
+      .container { padding: 20px 16px 60px; }
+      .hero h1 { font-size: 28px; }
+      .providers { grid-template-columns: 1fr; }
+      .row > div { flex: 1 1 100%; }
+      .progress-pct { font-size: 22px; }
+    }
+
+    /* Subtle entrance animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card { animation: fadeUp 0.4s ease-out backwards; }
+    .card:nth-child(1) { animation-delay: 0.0s; }
+    .card:nth-child(2) { animation-delay: 0.06s; }
+    .card:nth-child(3) { animation-delay: 0.12s; }
+    .card:nth-child(4) { animation-delay: 0.18s; }
+    .card:nth-child(5) { animation-delay: 0.24s; }
+    .card:nth-child(6) { animation-delay: 0.30s; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🎙️ Autrau</h1>
-    <p class="subtitle">Локальная транскрибация аудио. Несколько провайдеров, обновления из коробки, всё на вашем ПК.</p>
+    <!-- Brand header -->
+    <header class="brand">
+      <div class="brand-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2C10.34 2 9 3.34 9 5v6c0 1.66 1.34 3 3 3s3-1.34 3-3V5c0-1.66-1.34-3-3-3z" fill="white"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" fill="white"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">Autrau</div>
+        <div class="brand-tag">локальный транскрибатор</div>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+      <h1>Превращаем аудио в текст<br>прямо на вашем ПК</h1>
+      <p>Без облака, без интернета, без лимитов. Несколько провайдеров на выбор — <span class="accent">Faster-Whisper</span>, <span class="accent">Whisper.cpp</span> или <span class="accent">Parakeet v3</span> (SOTA 2025). Полный контроль и обновления из GitHub.</p>
+    </section>
 
     <!-- Provider & model selection -->
     <div class="card">
-      <h2>1. Провайдер и модель</h2>
+      <h2><span class="num">1</span> Провайдер и модель</h2>
       <div id="providers" class="providers"></div>
 
-      <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <button class="secondary" id="installProvider">⬇ Установить провайдер</button>
+      <div style="margin-top: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button class="ghost" id="installProvider">⬇ Установить провайдер</button>
         <button id="loadModel">⚙ Загрузить модель</button>
         <span class="small" id="loadedStatus"></span>
       </div>
 
-      <h2 style="margin-top: 18px;">Модели</h2>
+      <h2 style="margin-top: 22px;">Модели</h2>
       <div class="model-list" id="modelList"><div class="small">выберите провайдера</div></div>
     </div>
 
     <!-- Transcription -->
     <div class="card">
-      <h2>2. Транскрибация</h2>
-      <div class="row">
-        <div>
-          <label for="file">Аудиофайл</label>
-          <input type="file" id="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4,.aac">
-        </div>
+      <h2><span class="num">2</span> Аудио и язык</h2>
+
+      <div class="dropzone" id="dropzone">
+        <div class="dz-icon">📁</div>
+        <div class="dz-title">Перетащите аудиофайл сюда</div>
+        <div class="dz-hint">или нажмите, чтобы выбрать · mp3, wav, m4a, ogg, flac</div>
+        <input type="file" id="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4,.aac">
+      </div>
+      <div id="fileInfo" class="file-info hidden">
+        <span>🎵</span>
+        <span class="fi-name" id="fileName"></span>
+        <span class="fi-size" id="fileSize"></span>
+      </div>
+
+      <div class="row" style="margin-top: 16px;">
         <div>
           <label for="lang">Язык</label>
           <select id="lang">
@@ -156,7 +527,7 @@
         </div>
       </div>
 
-      <div style="margin-top: 16px;">
+      <div style="margin-top: 18px;">
         <button id="transcribe" disabled>▶ Транскрибировать</button>
       </div>
 
@@ -164,24 +535,36 @@
 
       <div class="progress-section hidden" id="progressSection">
         <div class="progress-header">
-          <span class="progress-title" id="progressLabel">Обработка…</span>
-          <span class="progress-pct" id="progressPct">0%</span>
+          <div class="progress-left">
+            <div class="mic-icon" id="micIcon">
+              <svg viewBox="0 0 24 24" fill="white">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="progress-label" id="progressLabel">Обработка…</div>
+              <div class="small" id="progressSubtitle">—</div>
+            </div>
+          </div>
+          <div class="progress-pct" id="progressPct">0%</div>
         </div>
         <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-        <div class="progress-stats">
-          <span id="progressSubtitle">—</span>
-          <span id="progressDetail"></span>
+        <div class="waveform" id="waveformWrap" style="margin-top: 10px;">
+          <canvas id="waveformCanvas"></canvas>
+          <div class="wf-progress" id="wfProgress"></div>
         </div>
+        <div class="small" id="progressDetail" style="margin-top: 8px; min-height: 16px;"></div>
       </div>
     </div>
 
-    <div class="card hidden" id="liveCard">
-      <h2>Поток</h2>
+    <div class="card stream-card hidden" id="liveCard">
+      <h2>🎙️ Распознаётся в реальном времени</h2>
       <div class="live" id="liveText"></div>
     </div>
 
     <div class="card hidden" id="resultCard">
-      <h2>Результат</h2>
+      <h2>✨ Результат</h2>
       <textarea id="result" readonly placeholder="Здесь появится текст…"></textarea>
       <div class="actions">
         <button class="secondary" id="copy">📋 Скопировать</button>
@@ -199,7 +582,7 @@
       </div>
 
       <div id="tab-updates">
-        <div class="actions" style="margin-bottom: 10px;">
+        <div class="actions" style="margin-bottom: 14px;">
           <button class="secondary" id="checkUpdates">🔍 Проверить обновления</button>
           <button class="secondary" id="applyAppUpdate">⬇ Обновить приложение</button>
           <span class="spacer"></span>
@@ -209,16 +592,22 @@
       </div>
 
       <div id="tab-diag" class="hidden">
-        <pre id="diagOut" style="background:#0d1117; padding:14px; border-radius:8px; overflow:auto; max-height:400px; font-size:12px; line-height:1.5;"></pre>
+        <pre id="diagOut" style="background:rgba(13,17,23,0.6); padding:14px; border-radius:10px; overflow:auto; max-height:400px; font-size:12px; line-height:1.5; font-family:'JetBrains Mono', monospace;"></pre>
       </div>
     </div>
   </div>
 
   <script>
-    const API = '';  // same origin
+    const API = '';
     const $ = (id) => document.getElementById(id);
 
-    // === state ===
+    // Provider brand colors for visual variety
+    const PROVIDER_COLORS = {
+      'faster-whisper': '#60a5fa',
+      'whisper-cpp':    '#6ee7b7',
+      'parakeet':       '#c084fc',
+    };
+
     const state = {
       providers: [],
       activeProvider: null,
@@ -256,6 +645,7 @@
     // ===== PROVIDERS =====
     function renderProviders() {
       const html = state.providers.map(p => {
+        const color = PROVIDER_COLORS[p.name] || 'var(--accent)';
         const tags = [];
         if (p.requires_gpu) tags.push('<span class="ptag gpu">GPU</span>');
         tags.push(p.installed
@@ -263,11 +653,14 @@
           : '<span class="ptag no">✗ не установлен</span>');
         return `
           <div class="provider-card ${state.activeProvider === p.name ? 'active' : ''} ${!p.installed ? 'disabled' : ''}"
-               data-name="${p.name}">
-            <div class="pname">${p.display_name}${tags.join('')}</div>
+               data-name="${p.name}" style="--pcolor:${color}">
+            <div class="pname">
+              <span class="pmark"></span>
+              ${p.display_name}${tags.join('')}
+            </div>
             <div class="pdesc">${p.description}</div>
-            ${!p.installed ? `<div class="small" style="color:var(--error); margin-top:6px;">${p.reason}</div>` : ''}
-            ${!p.installed ? `<div class="small" style="margin-top:4px;">💡 ${p.install_hint}</div>` : ''}
+            ${!p.installed ? `<div class="small" style="color:var(--error); margin-top:8px;">${p.reason}</div>` : ''}
+            ${!p.installed ? `<div class="small" style="margin-top:4px; font-family:'JetBrains Mono',monospace;">💡 ${p.install_hint}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -323,12 +716,12 @@
       if (p.models.length === 0) { $('modelList').innerHTML = '<div class="small">нет моделей</div>'; return; }
       const html = p.models.map(m => `
         <div class="model-row ${state.activeModel === m.name ? 'active' : ''}" data-name="${m.name}">
-          <div style="flex:1;">
-            <div class="mname">${m.name} ${m.size_mb ? `<span class="badge">${m.size_mb >= 1000 ? (m.size_mb/1024).toFixed(1) + ' ГБ' : m.size_mb + ' МБ'}</span>` : ''}</div>
-            <div class="mdesc">${m.display || ''}</div>
+          <div class="mname">
+            <code>${m.name}</code>
+            ${m.size_mb ? `<span class="badge">${m.size_mb >= 1000 ? (m.size_mb/1024).toFixed(1) + ' ГБ' : m.size_mb + ' МБ'}</span>` : ''}
           </div>
-          <span class="mstatus ${m.downloaded ? 'dl' : 'nodl'}">${m.downloaded ? '✓ скачана' : 'не скачана'}</span>
-          <button class="tiny secondary" data-action="download">${m.downloaded ? '↻ обновить' : '⬇ скачать'}</button>
+          <span class="mstatus ${m.downloaded ? 'dl' : 'nodl'}">${m.downloaded ? '✓ готово' : 'не скачана'}</span>
+          <button class="tiny secondary" data-action="download">${m.downloaded ? '↻' : '⬇'}</button>
         </div>
       `).join('');
       $('modelList').innerHTML = html;
@@ -429,6 +822,98 @@
         : '<span class="small">в памяти ничего не загружено</span>';
     }
 
+    // ===== DROPZONE =====
+    const dropzone = $('dropzone');
+    const fileInput = $('file');
+    const fileInfo = $('fileInfo');
+    dropzone.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'INPUT') fileInput.click();
+    });
+    ['dragenter', 'dragover'].forEach(ev => {
+      dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    });
+    dropzone.addEventListener('drop', (e) => {
+      const f = e.dataTransfer.files[0];
+      if (f) {
+        // Use DataTransfer to set file input
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change'));
+      }
+    });
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files[0];
+      if (f) {
+        $('fileName').textContent = f.name;
+        $('fileSize').textContent = (f.size / 1024 / 1024).toFixed(2) + ' МБ';
+        fileInfo.classList.remove('hidden');
+        drawWaveform(f);
+      } else {
+        fileInfo.classList.add('hidden');
+      }
+    });
+
+    // ===== WAVEFORM =====
+    let _audioBuffer = null;
+    async function drawWaveform(file) {
+      const canvas = $('waveformCanvas');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      const W = rect.width, H = rect.height;
+      ctx.clearRect(0, 0, W, H);
+      // Idle state — flat line
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+      ctx.stroke();
+      $('wfProgress').style.width = '0%';
+
+      // Try to decode audio for a real waveform
+      try {
+        const ab = await file.arrayBuffer();
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new Ctx();
+        _audioBuffer = await audioCtx.decodeAudioData(ab.slice(0));
+        audioCtx.close();
+        const data = _audioBuffer.getChannelData(0);
+        const step = Math.ceil(data.length / W);
+        const amp = H / 2;
+        const grad = ctx.createLinearGradient(0, 0, W, 0);
+        grad.addColorStop(0, 'rgba(255, 138, 101, 0.5)');
+        grad.addColorStop(1, 'rgba(192, 132, 252, 0.5)');
+        ctx.fillStyle = grad;
+        for (let i = 0; i < W; i++) {
+          let min = 1, max = -1;
+          for (let j = 0; j < step; j++) {
+            const v = data[i * step + j] || 0;
+            if (v < min) min = v;
+            if (v > max) max = v;
+          }
+          const x = i, y = (1 + min) * amp, h = (max - min) * amp;
+          ctx.fillRect(x, y, 1, Math.max(1, h));
+        }
+      } catch (e) {
+        // Some formats (m4a) might not decode — show decorative bars
+        const grad = ctx.createLinearGradient(0, 0, W, 0);
+        grad.addColorStop(0, 'rgba(255, 138, 101, 0.3)');
+        grad.addColorStop(1, 'rgba(192, 132, 252, 0.3)');
+        ctx.fillStyle = grad;
+        for (let i = 0; i < W; i += 3) {
+          const h = Math.random() * H * 0.6 + 4;
+          ctx.fillRect(i, (H - h) / 2, 2, h);
+        }
+      }
+    }
+
     // ===== TRANSCRIBE =====
     $('transcribe').addEventListener('click', transcribe);
     async function transcribe() {
@@ -443,8 +928,9 @@
       $('transcribe').disabled = true;
       $('progressSection').classList.remove('hidden');
       $('progressFill').style.width = '0%';
-      $('progressFill').classList.remove('error');
+      $('progressFill').classList.remove('error', 'done');
       $('progressPct').textContent = '0%';
+      $('micIcon').className = 'mic-icon transcribing';
       $('progressLabel').textContent = 'Загружаю файл…';
       $('progressSubtitle').textContent = `${file.name} · ${(file.size/1024/1024).toFixed(1)} МБ`;
       $('progressDetail').textContent = '';
@@ -453,6 +939,7 @@
       $('resultCard').classList.add('hidden');
       $('result').value = '';
       $('stats').textContent = '';
+      $('wfProgress').style.width = '0%';
       setStatus('');
 
       const start = Date.now();
@@ -484,6 +971,7 @@
               lastPct = p;
               $('progressFill').style.width = p + '%';
               $('progressPct').textContent = p + '%';
+              $('wfProgress').style.width = p + '%';
               if (m.payload && m.payload.text) {
                 acc += (acc && !acc.endsWith(' ') ? ' ' : '') + m.payload.text;
                 $('liveText').textContent = acc;
@@ -491,14 +979,19 @@
               }
             } else if (m.type === 'done') {
               $('progressFill').style.width = '100%';
+              $('progressFill').classList.add('done');
               $('progressPct').textContent = '100%';
+              $('micIcon').className = 'mic-icon done';
+              $('wfProgress').style.width = '100%';
               const text = m.payload.text || acc;
               $('result').value = text;
               $('resultCard').classList.remove('hidden');
+              $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
               const e = ((Date.now() - start) / 1000).toFixed(1);
               $('stats').textContent = `${text.length.toLocaleString('ru')} символов · ${e} с`;
               setStatus('✅ Готово', 'success');
               $('progressLabel').textContent = 'Готово';
+              $('progressDetail').textContent = '';
             } else if (m.type === 'error') {
               throw new Error(m.payload);
             }
@@ -507,6 +1000,7 @@
       } catch (e) {
         setStatus('❌ ' + e.message, 'error');
         $('progressFill').classList.add('error');
+        $('micIcon').className = 'mic-icon error';
         $('progressLabel').textContent = 'Ошибка';
       } finally {
         $('transcribe').disabled = !state.loaded.provider;
@@ -578,7 +1072,7 @@
         ? `<div class="update-row"><div class="utitle">⚠️ Ошибка проверки приложения</div><span class="uwhen">${app.error}</span></div>`
         : `<div class="update-row">
             <div class="utitle">📦 Приложение (autrau)
-              ${app.has_update ? '<span class="mstatus nodl">доступно обновление</span>' : '<span class="mstatus dl">актуально</span>'}
+              ${app.has_update ? '<span class="mstatus update">доступно</span>' : '<span class="mstatus dl">актуально</span>'}
             </div>
             <span class="uwhen">${app.behind_by ? `отстаём на ${app.behind_by} коммитов` : (app.note || '')}</span>
           </div>`;
@@ -587,7 +1081,7 @@
         const has = m.has_update;
         return `<div class="update-row">
           <div class="utitle">🧠 ${m.display || m.provider} · <code>${m.model}</code>
-            ${has ? '<span class="mstatus nodl">есть обновление</span>' : '<span class="mstatus dl">актуально</span>'}
+            ${has ? '<span class="mstatus update">есть обновление</span>' : '<span class="mstatus dl">актуально</span>'}
             ${m.local_exists ? '' : '<span class="mstatus nodl">не скачано</span>'}
           </div>
           <span class="uwhen">${m.last_modified ? new Date(m.last_modified).toLocaleDateString('ru') : ''}</span>
