@@ -10,7 +10,7 @@ Endpoints:
   GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
   POST /api/model/download        download a model for a provider (SSE progress)
-  POST /api/model/check           check update for one model
+  GET  /api/model/check           check update for one model
   POST /api/provider/load         (re)load provider+model into memory
   POST /transcribe                main endpoint, streams SSE progress
 
