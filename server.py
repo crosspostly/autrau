@@ -6,7 +6,7 @@ Endpoints:
   GET  /api/providers             list providers + status + model list
   GET  /api/config                current config
   POST /api/config                update config
-  GET  /api/updates               check app + model updates
+  GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
   POST /api/model/download        download a model for a provider (SSE progress)
   POST /api/model/check           check update for one model
@@ -21,16 +21,15 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
 import sys
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 
 # Add project root to path so `providers` and `tools` resolve when started directly
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -52,29 +51,26 @@ PORT = int(os.environ.get("AUTRAU_PORT", "8000"))
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 
 # ---- App ----
-app = FastAPI(title="Autrau", version="1.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=".*",
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-STATIC_DIR = PROJECT_ROOT
 
-# In-memory loaded model state
-_loaded_lock = asyncio.Lock()
+# In-memory loaded model state — must be declared before lifespan() so
+# the handler can assign _loaded_lock at startup.
+_loaded_lock: Optional[asyncio.Lock] = None
 _loaded_provider: Optional[str] = None
 _loaded_model: Optional[str] = None
 _loaded_device: Optional[str] = None
 
 
-@app.on_event("startup")
-async def on_startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern lifespan handler (replaces deprecated on_event)."""
+    global _loaded_lock
+    _loaded_lock = asyncio.Lock()
     cfg.init()
     if cfg.get("check_updates_on_start"):
         log.info("Startup update check (background) …")
         asyncio.create_task(_startup_check())
+    yield
+    # Shutdown: nothing to clean up — provider instances hold their own resources.
 
 
 async def _startup_check() -> None:
@@ -84,6 +80,16 @@ async def _startup_check() -> None:
             log.warning("App update available. Run update.bat or call /api/updates/app")
     except Exception as e:
         log.warning("Startup check failed: %s", e)
+
+
+app = FastAPI(title="Autrau", version="1.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+STATIC_DIR = PROJECT_ROOT
 
 
 # ---- HTML ----
@@ -153,7 +159,11 @@ async def api_provider_install(payload: dict) -> dict:
     name = payload.get("provider")
     if not name:
         raise HTTPException(400, "provider required")
-    p = registry.get(name)
+    try:
+        p = registry.get(name)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{name}' не найден. "
+                                 f"Доступные: {registry.names()}")
     log_cb = []
     ok = p.install(on_log=lambda m: log_cb.append(m))
     return {"ok": ok, "log": log_cb[-50:]}
@@ -166,8 +176,11 @@ async def api_provider_load(payload: dict) -> dict:
     device = payload.get("device") or cfg.get("device")
     if not name or not model:
         raise HTTPException(400, "provider and model required")
-
-    p = registry.get(name)
+    try:
+        p = registry.get(name)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{name}' не найден. "
+                                 f"Доступные: {registry.names()}")
     avail, why = p.is_available()
     if not avail:
         raise HTTPException(412, f"Провайдер не готов: {why}")
@@ -191,7 +204,11 @@ async def api_provider_load(payload: dict) -> dict:
 # ---- Model management ----
 @app.get("/api/model/check")
 async def api_model_check(provider: str, model: str) -> dict:
-    p = registry.get(provider)
+    try:
+        p = registry.get(provider)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{provider}' не найден. "
+                                 f"Доступные: {registry.names()}")
     return p.check_model_update(model)
 
 
@@ -201,7 +218,11 @@ async def api_model_download(payload: dict) -> StreamingResponse:
     model = payload.get("model")
     if not provider or not model:
         raise HTTPException(400, "provider and model required")
-    p = registry.get(provider)
+    try:
+        p = registry.get(provider)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{provider}' не найден. "
+                                 f"Доступные: {registry.names()}")
 
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_event_loop()
@@ -238,8 +259,51 @@ async def api_model_download(payload: dict) -> StreamingResponse:
 
 # ---- Updates ----
 @app.get("/api/updates")
-async def api_updates() -> dict:
-    return upd.check_all_updates()
+async def api_updates(stream: int = 0) -> Any:
+    """Check app + model updates.
+
+    Default: single JSON (backward-compatible).
+    `?stream=1`: SSE — emits `progress` events per checked item, then `done` with the full report.
+    """
+    if not stream:
+        return upd.check_all_updates()
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def _enqueue(kind: str, percent: int, payload: Any) -> None:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, (kind, percent, payload))
+        except RuntimeError:
+            pass
+
+    def worker() -> None:
+        try:
+            def on_progress(m: dict) -> None:
+                if m.get("phase") == "model":
+                    log.info("Update check %d/%d: %s", m["done"], m["total"], m["label"])
+                _enqueue("progress", m.get("percent", 0), m)
+            report = upd.check_all_updates(on_progress=on_progress)
+            _enqueue("done", 100, report)
+        except Exception as e:
+            log.exception("Update check failed")
+            _enqueue("error", 0, f"{type(e).__name__}: {e}")
+
+    loop.run_in_executor(None, worker)
+
+    async def stream_gen():
+        while True:
+            kind, percent, payload = await queue.get()
+            evt = json.dumps({"type": kind, "percent": percent, "payload": payload},
+                             ensure_ascii=False)
+            yield f"data: {evt}\n\n"
+            if kind in ("done", "error"):
+                break
+
+    return StreamingResponse(
+        stream_gen(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/updates/app")
@@ -263,13 +327,19 @@ async def transcribe(
     if not p_name or not m_name:
         raise HTTPException(400, "Не выбран провайдер/модель")
 
-    p = registry.get(p_name)
+    try:
+        p = registry.get(p_name)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{p_name}' не найден. "
+                                 f"Доступные: {registry.names()}")
     avail, why = p.is_available()
     if not avail:
         raise HTTPException(412, why)
 
     # Lazy-load if needed
     global _loaded_provider, _loaded_model, _loaded_device
+    if _loaded_lock is None:
+        raise HTTPException(503, "Server still starting")
     async with _loaded_lock:
         if not (_loaded_provider == p_name and _loaded_model == m_name
                 and _loaded_device == dev):

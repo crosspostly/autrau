@@ -148,10 +148,16 @@ def main() -> int:
 
     # Concise summary
     py = report["python"]
-    print(f"\nPython {py['version']} — {'OK' if py['ok'] else 'NEED UPGRADE'}")
-    print(f"ffmpeg   — {'OK' if report['ffmpeg']['ok'] else 'MISSING'}")
-    print(f"deps     — {'OK' if report['deps']['ok'] else 'MISSING: ' + ','.join(report['deps']['missing'])}")
-    print(f"git      — {'OK' if report['git']['ok'] else 'MISSING'}")
+    print(f"\nPython {py['version']} - {'OK' if py['ok'] else 'NEED UPGRADE'}")
+    if report['ffmpeg']['ok']:
+        print(f"ffmpeg   - OK ({report['ffmpeg']['version'][:60]})")
+    else:
+        print(f"ffmpeg   - MISSING (install: winget install Gyan.FFmpeg)")
+    if report['deps']['ok']:
+        print(f"deps     - OK")
+    else:
+        print(f"deps     - MISSING: {','.join(report['deps']['missing'])}")
+    print(f"git      - {'OK' if report['git']['ok'] else 'MISSING'}")
     upd = report.get("app_update", {})
     if upd.get("has_update"):
         print(f"⚠️  Есть обновления: отстаём на {upd['behind_by']} коммитов. Запустите update.bat")

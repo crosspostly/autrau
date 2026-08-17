@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -18,7 +18,7 @@ env/
 *.swp
 
 # Local data — never commit models, configs, or user uploads
-data/
+data/*
 !data/.gitkeep
 
 # OS
@@ -45,3 +45,16 @@ htmlcov/
 _smoketest.py
 _smoketest.py.disabled
 tests/
+
+# Local test artifacts
+_audit.py
+_repro.py
+server_test*.err
+server_test*.log
+
+# Accidental venv created at repo root (unused; start.bat uses .venv/)
+/Include/
+/Lib/
+/Scripts/
+/pyvenv.cfg
+

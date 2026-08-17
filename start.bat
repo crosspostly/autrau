@@ -35,8 +35,8 @@ if errorlevel 1 (
     set /a ERRORS+=1
     goto :END
 )
-for /f "tokens=2" %%i in ('python -c "import sys;print(sys.version_info[:2])" 2^>^&1') do set "PYV=%%i"
-echo [OK]   Python %PYV%
+for /f "tokens=1,2 delims=." %%a in ('python -c "import sys;print(f'{sys.version_info[0]}.{sys.version_info[1]}')" 2^>^&1') do set "PYMAJOR=%%a" & set "PYMINOR=%%b"
+echo [OK]   Python %PYMAJOR%.%PYMINOR%
 
 REM --- ffmpeg ---
 where ffmpeg >nul 2>&1

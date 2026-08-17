@@ -1,5 +1,8 @@
 # Core (required)
-fastapi>=0.110,<1.0
+# IMPORTANT: starlette < 0.50 is required. FastAPI 0.121.x passes
+# on_startup/on_shutdown to Starlette, which were removed in 1.x.
+fastapi>=0.115,<0.123
+starlette>=0.40,<0.50
 uvicorn[standard]>=0.27,<1.0
 python-multipart>=0.0.9
 huggingface-hub>=0.20

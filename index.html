@@ -582,11 +582,14 @@
       </div>
 
       <div id="tab-updates">
-        <div class="actions" style="margin-bottom: 14px;">
+        <div class="actions" style="margin-bottom: 10px;">
           <button class="secondary" id="checkUpdates">🔍 Проверить обновления</button>
           <button class="secondary" id="applyAppUpdate">⬇ Обновить приложение</button>
           <span class="spacer"></span>
           <span class="small" id="updateStatus"></span>
+        </div>
+        <div class="progress-track hidden" id="updateProgressWrap" style="margin-bottom: 12px;">
+          <div class="progress-fill" id="updateProgress"></div>
         </div>
         <div id="updatesList"><div class="small">Нажмите «Проверить обновления»</div></div>
       </div>
@@ -1051,17 +1054,47 @@
     // ===== UPDATES =====
     $('checkUpdates').addEventListener('click', checkUpdates);
     async function checkUpdates() {
-      $('updateStatus').textContent = 'проверяю …';
+      const statusEl = $('updateStatus');
+      const wrap = $('updateProgressWrap'), fill = $('updateProgress');
+      wrap.classList.remove('hidden');
+      fill.classList.remove('error', 'done');
+      fill.style.width = '0%';
+      statusEl.textContent = 'проверяю …';
       $('checkUpdates').disabled = true;
-      try {
-        const r = await fetch(API + '/api/updates');
-        const j = await r.json();
-        renderUpdates(j);
-        $('updateStatus').textContent = 'готово';
-      } catch (e) {
-        $('updateStatus').textContent = 'ошибка: ' + e.message;
-      } finally {
+      const finish = (txt, cls) => {
+        statusEl.textContent = txt;
         $('checkUpdates').disabled = false;
+        if (cls) fill.classList.add(cls);
+      };
+      try {
+        const es = new EventSource(API + '/api/updates?stream=1');
+        es.onmessage = (e) => {
+          const ev = JSON.parse(e.data);
+          if (ev.type === 'progress') {
+            const p = ev.payload || {};
+            if (p.percent != null) fill.style.width = p.percent + '%';
+            statusEl.textContent = (p.done && p.total)
+              ? `проверяю ${p.done}/${p.total} · ${p.label || ''}`
+              : (p.label || 'проверяю …');
+          } else if (ev.type === 'done') {
+            es.close();
+            fill.style.width = '100%';
+            fill.classList.add('done');
+            renderUpdates(ev.payload);
+            finish('✅ готово');
+          } else if (ev.type === 'error') {
+            es.close();
+            fill.classList.add('error');
+            finish('❌ ' + (ev.payload || 'ошибка'));
+          }
+        };
+        es.onerror = () => {
+          es.close();
+          fill.classList.add('error');
+          finish('❌ соединение прервано');
+        };
+      } catch (e) {
+        finish('❌ ' + e.message);
       }
     }
 

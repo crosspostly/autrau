@@ -141,8 +141,9 @@ class WhisperCppProvider(Provider):
             return
         from pywhispercpp.model import Model
         log.info("Loading whisper.cpp %s", model)
+        n_threads = kwargs.get("n_threads")  # None means auto in pywhispercpp
         self._model = Model(str(self.model_local_path(model)),
-                            n_threads=kwargs.get("n_threads", 0) or None,
+                            n_threads=n_threads,
                             print_progress=False)
         self._loaded_model = model
 

@@ -28,7 +28,21 @@ from .faster_whisper import _pip_install
 log = logging.getLogger("autrau.parakeet")
 
 _HF_API = "https://huggingface.co/api/models"
-_REPO = "nvidia/parakeet-tdt-0.6b-v3"
+_REPOS = {
+    # name -> (hf_repo, size_mb, languages, description)
+    "parakeet-tdt-0.6b-v3": (
+        "nvidia/parakeet-tdt-0.6b-v3",
+        2400,
+        None,  # multilingual (25 EU langs including Russian)
+        "Parakeet TDT 0.6B v3 — 25 языков (вкл. русский), SOTA 2025",
+    ),
+    "parakeet-tdt-0.6b-v2": (
+        "nvidia/parakeet-tdt-0.6b-v2",
+        2400,
+        ["en", "auto"],  # English-only
+        "Parakeet TDT 0.6B v2 — English-only, чуть быстрее v3",
+    ),
+}
 
 _PARAKEET_LANGS = [
     "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu",
@@ -42,7 +56,7 @@ class ParakeetProvider(Provider):
         name="parakeet",
         display_name="Parakeet TDT v3 (NVIDIA, GPU)",
         description="SOTA 2025-2026. 25 европейских языков + русский. Требует NVIDIA GPU + CUDA.",
-        models=["parakeet-tdt-0.6b-v3"],
+        models=list(_REPOS.keys()),
         default_model="parakeet-tdt-0.6b-v3",
         requires_gpu=True,
         python_deps=["nemo_toolkit[asr]"],
@@ -59,7 +73,7 @@ class ParakeetProvider(Provider):
     def is_available(self) -> tuple[bool, str]:
         # We import inside to avoid hard dep for users who don't use this provider.
         try:
-            import nemo.collections.asr as nemo_asr  # noqa: F401
+            import nemo.collections.asr.models  # noqa: F401
         except ImportError:
             return False, "nemo_toolkit не установлен. Запустите install."
         # Also check CUDA
@@ -84,37 +98,45 @@ class ParakeetProvider(Provider):
 
     # ---- model mgmt ----
     def list_models(self) -> list[dict]:
-        cache = self._hf_cache_dir()
-        return [{
-            "name": "parakeet-tdt-0.6b-v3",
-            "display": "Parakeet TDT 0.6B v3 — 600 М парам, 25 языков (SOTA 2025)",
-            "size_mb": 2400,
-            "downloaded": cache.exists() and any(cache.rglob("*.nemo")),
-            "local_path": str(cache),
-            "source_url": f"https://huggingface.co/{_REPO}",
-        }]
+        out = []
+        for name, (repo, size_mb, langs, desc) in _REPOS.items():
+            cache = self._hf_cache_dir(name)
+            out.append({
+                "name": name,
+                "display": f"{name} — {desc}",
+                "size_mb": size_mb,
+                "languages": langs,
+                "downloaded": cache.exists() and any(cache.rglob("*.nemo")),
+                "local_path": str(cache),
+                "source_url": f"https://huggingface.co/{repo}",
+            })
+        return out
 
-    def _hf_cache_dir(self) -> Path:
+    def _hf_cache_dir(self, model: str) -> Path:
+        repo = _REPOS.get(model, (None,))[0] or _REPOS["parakeet-tdt-0.6b-v3"][0]
         base = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
-        return base / "hub" / f"models--{_REPO.replace('/', '--')}"
+        return base / "hub" / f"models--{repo.replace('/', '--')}"
 
     def is_model_downloaded(self, model: str) -> bool:
-        cache = self._hf_cache_dir()
+        cache = self._hf_cache_dir(model)
         return cache.exists() and any(cache.rglob("*.nemo"))
 
     def model_local_path(self, model: str) -> Path:
-        return self._hf_cache_dir()
+        return self._hf_cache_dir(model)
 
     def check_model_update(self, model: str) -> dict:
+        repo = _REPOS.get(model, (None,))[0]
+        if not repo:
+            return {"provider": "parakeet", "model": model, "error": "Unknown model"}
         info: dict = {
             "provider": "parakeet",
             "model": model,
-            "source": f"https://huggingface.co/{_REPO}",
+            "source": f"https://huggingface.co/{repo}",
             "has_update": False,
             "local_exists": self.is_model_downloaded(model),
         }
         try:
-            with urllib.request.urlopen(f"{_HF_API}/{_REPO}", timeout=10) as r:
+            with urllib.request.urlopen(f"{_HF_API}/{repo}", timeout=10) as r:
                 data = json.loads(r.read().decode("utf-8"))
             info["remote_sha"] = data.get("sha", "")
             info["last_modified"] = data.get("lastModified", "")
@@ -127,10 +149,13 @@ class ParakeetProvider(Provider):
         model: str,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> Path:
+        repo = _REPOS.get(model, (None,))[0]
+        if not repo:
+            raise ValueError(f"Unknown model: {model}")
         cb = on_progress or (lambda p, m: None)
-        cb(0, f"Качаю {_REPO} с HuggingFace (~2.4 ГБ) …")
+        cb(0, f"Качаю {repo} с HuggingFace …")
         from huggingface_hub import snapshot_download
-        path = snapshot_download(repo_id=_REPO)
+        path = snapshot_download(repo_id=repo)
         cb(100, f"Готово: {path}")
         return Path(path)
 
@@ -192,9 +217,12 @@ class ParakeetProvider(Provider):
                         on_segment(seg, pct)
             segments = current
         else:
+            # No word-level timestamps: emit a single segment with estimated progress
             seg = Segment(start=0.0, end=0.0, text=text)
             segments = [seg]
             if on_segment and text:
+                # Send a "starting" tick and a "done" tick so UI gets two events
+                on_segment(Segment(start=0.0, end=0.0, text=""), 1)
                 on_segment(seg, 100)
 
         return {

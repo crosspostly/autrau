@@ -7,16 +7,13 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import subprocess
 import sys
-import threading
 import urllib.request
 from pathlib import Path
 from typing import Callable, Optional
 
 from .base import (
-    DEFAULT_MODELS_DIR,
     Provider,
     ProviderInfo,
     Segment,
@@ -26,15 +23,27 @@ from .base import (
 log = logging.getLogger("autrau.faster_whisper")
 
 _HF_API = "https://huggingface.co/api/models"
+# (name, size_mb, description, languages, repo_override)
+#   - repo_override: if set, model lives in a different HF repo (e.g. distil-*).
+#   - languages: special tags; None = multilingual, "en" = English-only.
 _MODELS = [
-    ("tiny", 75, "75 МБ · самая быстрая, низкая точность"),
-    ("base", 142, "142 МБ · для коротких записей"),
-    ("small", 466, "466 МБ · баланс скорости и качества"),
-    ("medium", 1500, "1.5 ГБ · высокая точность"),
-    ("large-v1", 2900, "2.9 ГБ · large v1"),
-    ("large-v2", 2900, "2.9 ГБ · large v2"),
-    ("large-v3", 2900, "2.9 ГБ · large v3 (рекомендуется)"),
-    ("distil-large-v3", 1500, "1.5 ГБ · Distil-Whisper large v3 (быстрее)"),
+    ("tiny",            75,   "75 МБ · самая быстрая, низкая точность",          None, None),
+    ("tiny.en",         75,   "75 МБ · tiny, только English (быстрее)",        "en", None),
+    ("base",            142,  "142 МБ · для коротких записей",                  None, None),
+    ("base.en",         142,  "142 МБ · base, только English",                   "en", None),
+    ("small",           466,  "466 МБ · баланс скорости и качества",             None, None),
+    ("small.en",        466,  "466 МБ · small, только English",                  "en", None),
+    ("medium",          1500, "1.5 ГБ · высокая точность",                        None, None),
+    ("medium.en",       1500, "1.5 ГБ · medium, только English",                 "en", None),
+    ("large-v1",        2900, "2.9 ГБ · large v1",                                None, None),
+    ("large-v2",        2900, "2.9 ГБ · large v2",                                None, None),
+    ("large-v3",        2900, "2.9 ГБ · large v3 (рекомендуется)",                None, None),
+    # Turbo: large-v3 trained on more data, much faster, same size
+    ("large-v3-turbo",  1500, "1.5 ГБ · large v3 turbo — быстрее large-v3",      None, "deepdml/faster-whisper-large-v3-turbo-ct2"),
+    # Distil-Whisper (English-only) — distilled for speed
+    ("distil-large-v3", 1500, "1.5 ГБ · Distil-Whisper large v3 (быстрее, EN)", "en", "Systran/faster-distil-whisper-large-v3"),
+    ("distil-medium.en",750,  "750 МБ · Distil-Whisper medium (EN)",            "en", "Systran/faster-distil-whisper-medium.en"),
+    ("distil-small.en", 250,  "250 МБ · Distil-Whisper small (EN)",             "en", "Systran/faster-distil-whisper-small.en"),
 ]
 HF_REPO_PREFIX = "Systran/faster-whisper"
 
@@ -75,28 +84,40 @@ class FasterWhisperProvider(Provider):
     # ---- model metadata ----
     def list_models(self) -> list[dict]:
         out = []
-        for name, size_mb, desc in _MODELS:
+        for name, size_mb, desc, langs, repo_override in _MODELS:
             local = self.model_local_path(name)
+            repo = repo_override or f"{HF_REPO_PREFIX}-{name}"
             out.append({
                 "name": name,
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
+                "languages": langs,
                 "downloaded": local.exists(),
                 "local_path": str(local),
-                "source_url": f"https://huggingface.co/{HF_REPO_PREFIX}-{name}",
+                "source_url": f"https://huggingface.co/{repo}",
             })
         return out
 
     def model_local_path(self, model: str) -> Path:
         # faster-whisper caches under HF_HOME; for the UI we expose
-        # the canonical cache dir but also support a "data/models/" symlink.
-        return _hf_cache_dir(f"{HF_REPO_PREFIX}-{model}")
+        # the canonical cache dir. For models in other repos, the local
+        # path is the same hub directory (HF doesn't care which repo).
+        entry = next((m for m in _MODELS if m[0] == model), None)
+        if entry is None:
+            raise ValueError(f"Unknown model: {model}")
+        _, _, _, _, repo_override = entry
+        repo_id = repo_override or f"{HF_REPO_PREFIX}-{model}"
+        return _hf_cache_dir(repo_id)
 
     def is_model_downloaded(self, model: str) -> bool:
         return self.model_local_path(model).exists()
 
     def check_model_update(self, model: str) -> dict:
-        repo = f"{HF_REPO_PREFIX}-{model}"
+        entry = next((m for m in _MODELS if m[0] == model), None)
+        if entry is None:
+            return {"provider": "faster-whisper", "model": model,
+                    "error": "Unknown model"}
+        repo = entry[4] or f"{HF_REPO_PREFIX}-{model}"
         local = self.model_local_path(model)
         info: dict = {
             "provider": "faster-whisper",
@@ -123,15 +144,15 @@ class FasterWhisperProvider(Provider):
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> Path:
         from huggingface_hub import snapshot_download
-        repo = f"{HF_REPO_PREFIX}-{model}"
+        entry = next((m for m in _MODELS if m[0] == model), None)
+        if entry is None:
+            raise ValueError(f"Unknown model: {model}")
+        repo = entry[4] or f"{HF_REPO_PREFIX}-{model}"
         cb = on_progress or (lambda p, m: None)
         cb(0, f"Качаю {repo} с huggingface.co …")
-        # snapshot_download blocks; progress UI updates via stderr redirect
-        # could be added later. For now we tick 0% → 99% → 100%.
-        path = snapshot_download(
-            repo_id=repo,
-            allow_patterns=["*.bin", "*.json", "tokenizer.*", "vocabulary.*"],
-        )
+        # No allow_patterns — let snapshot_download grab everything the repo
+        # ships (config.json, tokenizer.json, vocabulary.txt, model.bin).
+        path = snapshot_download(repo_id=repo)
         cb(100, f"Готово: {path}")
         return Path(path)
 

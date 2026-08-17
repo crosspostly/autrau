@@ -69,7 +69,10 @@ def get(key: str, default: Any = None) -> Any:
 def set(key: str, value: Any) -> None:
     with _lock:
         _state[key] = value
-    save()
+        _path.write_text(
+            json.dumps(_state, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
 
 def all() -> dict[str, Any]:

@@ -70,20 +70,33 @@ def run_full_update() -> dict:
     }
 
 
-def check_all_updates() -> dict:
-    """Used by /api/updates: report app + per-model status."""
+def check_all_updates(
+    on_progress: Optional[Callable[[dict], None]] = None,
+) -> dict:
+    """Used by /api/updates: report app + per-model status.
+
+    `on_progress` is called with a dict: {phase, label, percent, done, total, provider, model}.
+    """
+    cb = on_progress or (lambda m: None)
+    cb({"phase": "app", "label": "проверка обновления приложения …", "percent": 0})
     app = _check_app_update()
     models: list[dict] = []
     try:
         from providers import registry
-        for p in registry.all():
-            for m in p.info.models:
-                info = p.check_model_update(m)
-                info["provider"] = p.info.name
-                info["display"] = p.info.display_name
-                models.append(info)
+        pairs = [(p, m) for p in registry.all() for m in p.info.models]
+        total = len(pairs)
+        for i, (p, m) in enumerate(pairs, 1):
+            cb({"phase": "model", "provider": p.info.name, "model": m,
+                "done": i, "total": total,
+                "label": f"{p.info.name} / {m} …",
+                "percent": round(100 * (i - 1) / total) if total else 100})
+            info = p.check_model_update(m)
+            info["provider"] = p.info.name
+            info["display"] = p.info.display_name
+            models.append(info)
     except Exception as e:
         models = [{"error": f"providers unavailable: {e}"}]
+    cb({"phase": "done", "label": "готово", "percent": 100})
     return {"app": app, "models": models}
 
 
