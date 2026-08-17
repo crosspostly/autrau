@@ -8,6 +8,9 @@ deletion: files older than N days are removed on a background timer.
 Rules:
 - `cleanup_after_days <= 0`  → nothing is ever deleted (disabled).
 - `cleanup_after_days = N`   → files transcribed N or more days ago are deleted.
+- Favorites (see `tools.favorites.py`) are NEVER deleted by cleanup, even if
+  they match the age rule. Un-starring makes them eligible again on the
+  next cleanup run.
 """
 from __future__ import annotations
 
@@ -17,6 +20,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+
+from .favorites import names as _favorite_names
 
 log = logging.getLogger("autrau.cleanup")
 
@@ -63,19 +68,47 @@ def count_files() -> int:
     return len(list_files())
 
 
+def list_transcripts() -> list[dict[str, Any]]:
+    """Return transcript metadata for the UI: name, size, modified.
+
+    Each entry: {name, size_bytes, size_mb, modified} with `modified` as an
+    ISO-8601 string in local time. Files are sorted by name.
+    """
+    result = []
+    for f in list_files():
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        result.append(
+            {
+                "name": f.name,
+                "size_bytes": st.st_size,
+                "size_mb": round(st.st_size / 1048576, 2),
+                "modified": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+            }
+        )
+    return result
+
+
 def run_cleanup(days: int, dry_run: bool = False) -> dict[str, Any]:
     """Delete transcript files older than `days` days.
 
     `days <= 0` disables deletion (returns summary without touching files).
-    Returns: {ok, enabled, days, deleted, kept, freed_mb}.
+    Files marked as favorites (see `tools.favorites.py`) are NEVER deleted,
+    even when they match the age rule; they are counted as `protected`.
+    Un-starring a file makes it eligible again on the next cleanup run.
+    Returns: {ok, enabled, days, deleted, protected, kept, freed_mb}.
     """
     files = list_files()
+    favorites = _favorite_names() if files else set()
     if days <= 0 or not files:
         return {
             "ok": True,
             "enabled": days > 0,
             "days": days,
             "deleted": 0,
+            "protected": len({f.name for f in files} & favorites),
             "kept": len(files),
             "freed_mb": 0.0,
         }
@@ -83,7 +116,12 @@ def run_cleanup(days: int, dry_run: bool = False) -> dict[str, Any]:
     deleted = 0
     freed = 0
     kept = 0
+    protected = 0
     for f in files:
+        if f.name in favorites:
+            # Favorites survive cleanup unconditionally.
+            protected += 1
+            continue
         try:
             age_ok = f.stat().st_mtime < cutoff
         except OSError:
@@ -104,12 +142,16 @@ def run_cleanup(days: int, dry_run: bool = False) -> dict[str, Any]:
                 pass
         else:
             kept += 1
-    log.info("Cleanup (days=%d): удалено %d, осталось %d", days, deleted, kept)
+    log.info(
+        "Cleanup (days=%d): удалено %d, избранных защищено %d, осталось %d",
+        days, deleted, protected, kept,
+    )
     return {
         "ok": True,
         "enabled": True,
         "days": days,
         "deleted": deleted,
+        "protected": protected,
         "kept": kept,
         "freed_mb": round(freed / 1048576, 2),
     }

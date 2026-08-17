@@ -17,6 +17,8 @@
 | `GET` | `/api/config` | Текущая конфигурация (JSON) |
 | `POST` | `/api/config` | Обновить ключи конфигурации |
 | `POST` | `/api/cleanup` | Удалить расшифровки старше N дней |
+| `GET` | `/api/transcripts` | Список расшифровок + флаги избранного |
+| `POST` | `/api/favorites` | Пометить/снять избранное (защита от авто-очистки) |
 | `GET` | `/api/updates` | Проверка обновлений (JSON; `?stream=1` — SSE-прогресс) |
 | `POST` | `/api/updates/app` | Self-update: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` |
 | `POST` | `/api/model/download` | Скачать модель (SSE-прогресс) |
@@ -52,11 +54,24 @@
 
 Ответ — полная конфигурация после применения.
 
-`POST /api/cleanup` — тело опционально: `{"days": N}` переопределяет значение из конфига для одного запуска; без тела используется `cleanup_after_days`:
+`POST /api/cleanup` — тело опционально: `{"days": N}` переопределяет значение из конфига для одного запуска; без тела используется `cleanup_after_days`. Расшифровки из избранного никогда не удаляются, даже если подходят по возрасту (считаются в `protected`):
 
 ```json
-{ "ok": true, "enabled": true, "days": 1, "deleted": 2, "kept": 1, "freed_mb": 0.01, "active": true }
+{ "ok": true, "enabled": true, "days": 1, "deleted": 2, "protected": 1, "kept": 1, "freed_mb": 0.01, "active": true }
 ```
+
+`GET /api/transcripts` — список сохранённых расшифровок с метаданными и флагом избранного. Мёртвые записи избранного (файл удалён) вычищаются автоматически:
+
+```json
+{
+  "transcripts": [
+    { "name": "2026-08-17_10-00-00_речь.txt", "size_bytes": 1240, "size_mb": 0.0, "modified": "2026-08-17T10:00:03", "is_favorite": true }
+  ],
+  "count": 1
+}
+```
+
+`POST /api/favorites` — тело `{"name": "файл.txt"}` переключает (toggle) состояние; `{"name": "файл.txt", "favorite": true|false}` задаёт явно. Избранные расшифровки защищены от авто-очистки (`run_cleanup` пропускает их до проверки возраста); снятие ярлыка снова делает файл кандидатом на удаление при следующем прогоне. `404`, если файл не существует. Ответ — `{"name": "...", "is_favorite": true|false}`.
 
 `POST /api/provider/install` — тело `{"provider": "whisper-cpp"}`; ответ `{"ok": true, "log": [...]}` (последние ~50 строк вывода pip).
 

@@ -49,6 +49,7 @@ tests/
 # Local test artifacts
 _audit.py
 _repro.py
+_test_favorites.py
 server_test*.err
 server_test*.log
 

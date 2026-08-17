@@ -59,6 +59,27 @@ curl -X POST http://127.0.0.1:8000/transcribe -F "file=@a.mp3" -F "provider=para
 
 5. Авто-очистка (см. [CONFIGURATION.md](CONFIGURATION.md)): после транскрибации проверьте `data/transcripts/`, затем `curl -X POST http://127.0.0.1:8000/api/cleanup -H "Content-Type: application/json" -d '{"days":0}'` — при `days=0` ничего не удаляется.
 
+6. Избранное (защита от авто-очистки):
+
+```bash
+# список расшифровок (должен появиться файл после шага 3)
+curl http://127.0.0.1:8000/api/transcripts
+
+# пометить избранным (toggle)
+curl -X POST http://127.0.0.1:8000/api/favorites -H "Content-Type: application/json" -d '{"name":"2026-08-17_10-00-00_sample.txt"}'
+# → {"name":"...","is_favorite":true}
+
+# явно снять ярлык
+curl -X POST http://127.0.0.1:8000/api/favorites -H "Content-Type: application/json" -d '{"name":"...","favorite":false}'
+
+# несуществующий файл → 404
+curl -X POST http://127.0.0.1:8000/api/favorites -H "Content-Type: application/json" -d '{"name":"nope.txt"}'
+```
+
+Проверка защиты: при `cleanup_after_days=0` временно установите `days=1` через
+`/api/cleanup`, файл старше суток при этом **не удаляется**, если он в избранном
+(в ответе cleanup `protected ≥ 1`), и удаляется после снятия ярлыка.
+
 ## Как писать новые тесты
 
 Официального фреймворка нет, поэтому принятые паттерны:

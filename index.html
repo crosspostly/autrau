@@ -426,6 +426,22 @@
     .update-row .utitle { flex: 1; display: flex; align-items: center; gap: 8px; }
     .update-row .uwhen { color: var(--text-muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
 
+    /* Transcript list (favorites) */
+    .t-row {
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      display: flex; gap: 12px; align-items: center; font-size: 13px;
+    }
+    .t-row:last-child { border-bottom: none; }
+    .t-row .tname { flex: 1; word-break: break-all; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .t-row .tmeta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+    .star-btn {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      width: 34px; height: 34px; cursor: pointer; font-size: 16px; line-height: 1;
+      color: var(--text-muted); flex: none; transition: all 0.15s;
+    }
+    .star-btn:hover { border-color: var(--warn); color: var(--warn); }
+    .star-btn.fav { color: var(--warn); border-color: var(--warn); background: rgba(250, 204, 21, 0.08); }
+
     /* ============================================================
        Responsive
        ============================================================ */
@@ -626,6 +642,24 @@
         <span class="small" id="cleanupStatus"></span>
       </div>
     </div>
+
+    <!-- Transcripts -->
+    <div class="card">
+      <h2><span class="num">4</span> Расшифровки</h2>
+      <div class="small" style="margin-bottom: 10px; opacity: .75;">
+        Сохранённые файлы из <code>data/transcripts/</code>. Расшифровки ★ в
+        избранном <b>никогда не удаляются</b> авто-очисткой, даже если подходят
+        по условию «старше N дней». Снимите ★ — файл снова удаляется штатно.
+      </div>
+      <div id="transcriptsList">
+        <div class="small">Загрузка…</div>
+      </div>
+      <div class="actions" style="margin-top: 12px;">
+        <button class="secondary" id="refreshTranscripts">🔄 Обновить список</button>
+        <span class="spacer"></span>
+        <span class="small" id="transcriptsStatus"></span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -670,6 +704,7 @@
         renderModels();
         updateLoadedStatus();
         $('transcribe').disabled = !state.loaded.provider;
+        loadTranscripts();
       } catch (e) {
         setStatus('⚠️ сервер не отвечает. Запустите start.bat', 'error');
       }
@@ -1025,6 +1060,7 @@
               setStatus('✅ Готово', 'success');
               $('progressLabel').textContent = 'Готово';
               $('progressDetail').textContent = '';
+              loadTranscripts();
             } else if (m.type === 'error') {
               throw new Error(m.payload);
             }
@@ -1116,9 +1152,81 @@
         st.textContent = j.deleted > 0
           ? `🗑 удалено ${j.deleted}, осталось ${j.kept} (${j.freed_mb} МБ)`
           : `файлов к удалению нет (осталось ${j.kept})`;
+        loadTranscripts();
       } catch (e) {
         st.textContent = '❌ ' + e.message;
       }
+    });
+
+    // ===== TRANSCRIPTS (favorites) =====
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g,
+        c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtDate(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      return d.toLocaleDateString('ru') + ' ' +
+             d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderTranscripts(items) {
+      const wrap = $('transcriptsList');
+      if (!items.length) {
+        wrap.innerHTML =
+          '<div class="small">Пока нет расшифровок — после распознавания файл появится здесь.</div>';
+        return;
+      }
+      wrap.innerHTML = items.map(t => `
+        <div class="t-row">
+          <button class="star-btn${t.is_favorite ? ' fav' : ''}" data-name="${esc(t.name)}"
+                  title="${t.is_favorite ? 'Убрать из избранного — файл снова удаляется штатно' : 'Добавить в избранное — не будет удаляться авто-очисткой'}">
+            ${t.is_favorite ? '★' : '☆'}
+          </button>
+          <span class="tname">${esc(t.name)}</span>
+          <span class="tmeta">${t.size_mb} МБ · ${fmtDate(t.modified)}</span>
+        </div>`).join('');
+    }
+
+    async function loadTranscripts() {
+      const st = $('transcriptsStatus');
+      try {
+        const r = await fetch(API + '/api/transcripts');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        renderTranscripts(j.transcripts || []);
+        st.textContent = j.count ? `${j.count} файл(ов)` : '';
+      } catch (e) {
+        $('transcriptsList').innerHTML =
+          '<div class="small">⚠️ не удалось загрузить: ' + esc(e.message) + '</div>';
+        st.textContent = '';
+      }
+    }
+
+    $('transcriptsList').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.star-btn');
+      if (!btn) return;
+      const st = $('transcriptsStatus');
+      st.textContent = 'сохраняю …';
+      try {
+        const r = await fetch(API + '/api/favorites', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: btn.dataset.name }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        st.textContent = j.is_favorite
+          ? '★ в избранном — защищено от авто-очистки'
+          : '☆ избранное снято — файл снова удаляется штатно';
+        loadTranscripts();
+      } catch (err) {
+        st.textContent = '❌ ' + err.message;
+      }
+    });
+
+    $('refreshTranscripts').addEventListener('click', () => {
+      $('transcriptsStatus').textContent = 'обновляю …';
+      loadTranscripts();
     });
 
     // ===== UPDATES =====

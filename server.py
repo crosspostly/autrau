@@ -7,6 +7,8 @@ Endpoints:
   GET  /api/config                current config
   POST /api/config                update config
   POST /api/cleanup               delete transcripts older than N days (0 = nothing)
+  GET  /api/transcripts           list transcripts + favorite flags (prunes dead favorites)
+  POST /api/favorites             toggle/set favorite (favorites survive cleanup)
   GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
   POST /api/model/download        download a model for a provider (SSE progress)
@@ -42,6 +44,7 @@ import tools.config as cfg  # noqa: E402
 import tools.check as check  # noqa: E402
 import tools.update as upd  # noqa: E402
 import tools.cleanup as clean  # noqa: E402
+import tools.favorites as fav  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -164,6 +167,45 @@ async def api_cleanup(payload: Optional[dict] = None) -> dict:
     report = clean.run_cleanup(days)
     report["active"] = int(cfg.get("cleanup_after_days", 0)) > 0
     return report
+
+
+# ---- Transcripts & favorites ----
+@app.get("/api/transcripts")
+async def api_transcripts() -> dict:
+    """List saved transcripts with favorite flags.
+
+    Stale favorite entries (files that no longer exist) are pruned from
+    `data/favorites.json` so the list never shows dead records.
+    """
+    items = clean.list_transcripts()
+    existing = {it["name"] for it in items}
+    fav.prune(existing)
+    favorites = fav.names()
+    for it in items:
+        it["is_favorite"] = it["name"] in favorites
+    return {"transcripts": items, "count": len(items)}
+
+
+@app.post("/api/favorites")
+async def api_favorites(payload: dict) -> dict:
+    """Toggle or explicitly set favorite status for one transcript.
+
+    Body: {"name": "file.txt"}            — toggle current state;
+          {"name": "file.txt", "favorite": true|false} — explicit set.
+    Favorites are protected from auto-cleanup (see tools.cleanup.run_cleanup);
+    un-starring makes the file eligible again on the next cleanup run.
+    Returns 404 when the transcript file does not exist.
+    """
+    name = payload.get("name")
+    if not name or not isinstance(name, str):
+        raise HTTPException(400, "name обязателен")
+    if not clean.transcripts_dir().joinpath(name).is_file():
+        raise HTTPException(404, f"Расшифровка '{name}' не найдена")
+    if "favorite" in payload:
+        state = fav.set_favorite(name, bool(payload["favorite"]))
+    else:
+        state = fav.toggle(name)
+    return {"name": name, "is_favorite": state}
 
 
 # ---- Providers ----
