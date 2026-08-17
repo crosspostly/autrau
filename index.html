@@ -169,7 +169,7 @@
       display: block; font-size: 12px; color: var(--text-muted);
       margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
     }
-    input[type="file"], input[type="text"], select {
+    input[type="file"], input[type="text"], input[type="number"], select {
       width: 100%; padding: 11px 14px; background: rgba(13, 17, 23, 0.6);
       border: 1px solid var(--border); border-radius: var(--radius-sm);
       color: var(--text); font-size: 14px; font-family: inherit;
@@ -598,6 +598,34 @@
         <pre id="diagOut" style="background:rgba(13,17,23,0.6); padding:14px; border-radius:10px; overflow:auto; max-height:400px; font-size:12px; line-height:1.5; font-family:'JetBrains Mono', monospace;"></pre>
       </div>
     </div>
+
+    <!-- Settings -->
+    <div class="card">
+      <h2><span class="num">3</span> Настройки</h2>
+
+      <div class="row">
+        <div style="flex: 1 1 100%; max-width: 460px;">
+          <label for="cleanupDays">Авто-очистка расшифровок</label>
+          <div style="display:flex; gap:10px; align-items:center; margin-top:6px;">
+            <input type="number" id="cleanupDays" min="0" max="3650" step="1" value="0"
+                   style="width:120px;" title="Через сколько дней удалять расшифровки">
+            <span class="small">дней · 0 = не удалять</span>
+          </div>
+          <div class="small" style="margin-top:8px; opacity:.75;">
+            Каждая расшифровка сохраняется в <code>data/transcripts/</code>.
+            Файлы, расшифрованные N и более дней назад, удаляются автоматически
+            (проверка при старте и каждые 6 часов).
+          </div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top: 14px;">
+        <button class="secondary" id="saveCleanup">💾 Сохранить настройку</button>
+        <button class="secondary" id="cleanupNow">🗑 Очистить сейчас</button>
+        <span class="spacer"></span>
+        <span class="small" id="cleanupStatus"></span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -635,6 +663,8 @@
         state.activeModel = prov.active.model;
         state.loaded = h.loaded;
         $('lang').value = cfg.language;
+        const cd = parseInt(cfg.cleanup_after_days, 10);
+        $('cleanupDays').value = Number.isFinite(cd) && cd >= 0 ? cd : 0;
 
         renderProviders();
         renderModels();
@@ -1050,6 +1080,46 @@
       const j = await r.json();
       $('diagOut').textContent = JSON.stringify(j, null, 2);
     }
+
+    // ===== SETTINGS: cleanup =====
+    $('saveCleanup').addEventListener('click', async () => {
+      const days = Math.max(0, Math.floor(parseInt($('cleanupDays').value, 10) || 0));
+      $('cleanupDays').value = days;
+      const st = $('cleanupStatus');
+      st.textContent = 'сохраняю …';
+      try {
+        const r = await fetch(API + '/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cleanup_after_days: days }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        st.textContent = days > 0
+          ? `✅ сохранено: удалять старше ${days} дн.`
+          : '✅ сохранено: авто-очистка выключена';
+      } catch (e) {
+        st.textContent = '❌ ' + e.message;
+      }
+    });
+
+    $('cleanupNow').addEventListener('click', async () => {
+      const days = Math.max(0, Math.floor(parseInt($('cleanupDays').value, 10) || 0));
+      const st = $('cleanupStatus');
+      st.textContent = 'очищаю …';
+      try {
+        const r = await fetch(API + '/api/cleanup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ days }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        st.textContent = j.deleted > 0
+          ? `🗑 удалено ${j.deleted}, осталось ${j.kept} (${j.freed_mb} МБ)`
+          : `файлов к удалению нет (осталось ${j.kept})`;
+      } catch (e) {
+        st.textContent = '❌ ' + e.message;
+      }
+    });
 
     // ===== UPDATES =====
     $('checkUpdates').addEventListener('click', checkUpdates);

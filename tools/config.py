@@ -25,6 +25,7 @@ DEFAULTS: dict[str, Any] = {
     "compute_type": "auto",             # "auto" | "int8" | "float16" | "float32"
     "check_updates_on_start": True,
     "auto_update_app": False,           # self-update on start
+    "cleanup_after_days": 0,            # 0 = keep transcripts forever; N>0 = auto-delete older than N days
 }
 
 

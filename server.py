@@ -6,6 +6,7 @@ Endpoints:
   GET  /api/providers             list providers + status + model list
   GET  /api/config                current config
   POST /api/config                update config
+  POST /api/cleanup               delete transcripts older than N days (0 = nothing)
   GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
   POST /api/model/download        download a model for a provider (SSE progress)
@@ -40,6 +41,7 @@ from providers.base import Segment  # noqa: E402
 import tools.config as cfg  # noqa: E402
 import tools.check as check  # noqa: E402
 import tools.update as upd  # noqa: E402
+import tools.cleanup as clean  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -69,6 +71,7 @@ async def lifespan(app: FastAPI):
     if cfg.get("check_updates_on_start"):
         log.info("Startup update check (background) …")
         asyncio.create_task(_startup_check())
+    asyncio.create_task(_cleanup_loop())
     yield
     # Shutdown: nothing to clean up — provider instances hold their own resources.
 
@@ -80,6 +83,21 @@ async def _startup_check() -> None:
             log.warning("App update available. Run update.bat or call /api/updates/app")
     except Exception as e:
         log.warning("Startup check failed: %s", e)
+
+
+_CLEANUP_INTERVAL_S = 6 * 3600  # run age-based cleanup every 6 hours
+
+
+async def _cleanup_loop() -> None:
+    """Periodically delete transcripts older than `cleanup_after_days` (0 = off)."""
+    while True:
+        try:
+            days = int(cfg.get("cleanup_after_days", 0))
+            if days > 0:
+                clean.run_cleanup(days)
+        except Exception as e:
+            log.warning("Cleanup failed: %s", e)
+        await asyncio.sleep(_CLEANUP_INTERVAL_S)
 
 
 app = FastAPI(title="Autrau", version="1.0.0", lifespan=lifespan)
@@ -126,6 +144,26 @@ async def api_set_config(payload: dict) -> dict:
         if k in cfg.DEFAULTS:
             cfg.set(k, v)
     return cfg.all()
+
+
+# ---- Cleanup ----
+@app.post("/api/cleanup")
+async def api_cleanup(payload: Optional[dict] = None) -> dict:
+    """Delete transcripts older than N days immediately. Returns summary.
+
+    Body optional: {"days": N} overrides the configured value for this run;
+    default uses cfg.cleanup_after_days (0 = nothing deleted).
+    """
+    days = (payload or {}).get("days")
+    if days is None:
+        days = cfg.get("cleanup_after_days", 0)
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "days должен быть целым числом")
+    report = clean.run_cleanup(days)
+    report["active"] = int(cfg.get("cleanup_after_days", 0)) > 0
+    return report
 
 
 # ---- Providers ----
@@ -374,6 +412,11 @@ async def transcribe(
 
             out = p.transcribe(tmp_path, language or cfg.get("language", "ru"),
                                on_segment=on_seg)
+            try:
+                clean.save_transcript(file.filename, out.get("text", ""),
+                                      out.get("info", {}))
+            except Exception as se:
+                log.warning("Не удалось сохранить расшифровку: %s", se)
             _enqueue("done", 100, out)
         except Exception as e:
             log.exception("Transcribe failed")
