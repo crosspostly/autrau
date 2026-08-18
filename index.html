@@ -723,15 +723,11 @@
       </div>
     </div>
 
-    <div class="card stream-card hidden" id="liveCard">
-      <h2>🎙️ Распознаётся в реальном времени</h2>
+    <div class="card stream-card hidden" id="transcriptionCard">
+      <h2 id="transcriptionTitle">🎙️ Распознаётся в реальном времени</h2>
       <div class="live" id="liveText"></div>
-    </div>
-
-    <div class="card hidden" id="resultCard">
-      <h2>✨ Результат</h2>
-      <textarea id="result" readonly placeholder="Здесь появится текст…"></textarea>
-      <div class="actions">
+      <textarea id="result" class="hidden" readonly placeholder="Здесь появится текст…"></textarea>
+      <div class="actions hidden" id="resultActions">
         <button class="secondary" id="copy">📋 Скопировать</button>
         <button class="secondary" id="download">💾 Скачать .txt</button>
         <span class="spacer"></span>
@@ -859,10 +855,55 @@
         $('cleanupDays').value = Number.isFinite(cd) && cd >= 0 ? cd : 0;
 
         renderModelSelect();
+        updatePresetLabels();
         updateLoadedStatus();
         loadTranscripts();
       } catch (e) {
         setStatus('⚠️ сервер не отвечает. Запустите start.bat', 'error');
+      }
+    }
+
+    // ===== ПРЕСЕТЫ — обновляем лейблы под реально скачанные модели =====
+    function updatePresetLabels() {
+      const PRESET_KEYS = {
+        fast:     ['tiny', 'base'],
+        balanced: ['small', 'medium'],
+        thorough: ['large', 'large-v2', 'large-v3'],
+      };
+      const PRESET_ICONS = { fast: '⚡', balanced: '⚖', thorough: '🎯' };
+      const PRESET_NAMES  = { fast: 'Быстрая', balanced: 'Сбалансированная', thorough: 'Тщательная' };
+
+      for (const [preset, keys] of Object.entries(PRESET_KEYS)) {
+        const btn = $(`preset${preset.charAt(0).toUpperCase() + preset.slice(1)}`);
+        if (!btn) continue;
+        const span = btn.querySelector('.preset-speed');
+        // Находим лучшую скачанную модель по preset
+        let best = null, bestAcc = -1;
+        for (const p of state.providers) {
+          if (!p.installed) continue;
+          for (const m of p.models) {
+            if (!m.downloaded) continue;
+            if (keys.some(k => m.name.includes(k))) {
+              const acc = m.accuracy || 0;
+              if (acc > bestAcc) { bestAcc = acc; best = m; }
+            }
+          }
+        }
+        // Fallback: лучшая скачанная без фильтра
+        if (!best) {
+          for (const p of state.providers) {
+            if (!p.installed) continue;
+            for (const m of p.models) {
+              if (!m.downloaded) continue;
+              const acc = m.accuracy || 0;
+              if (acc > bestAcc) { bestAcc = acc; best = m; }
+            }
+          }
+        }
+        if (best) {
+          btn.querySelector('span:last-child') && (btn.querySelector('span:last-child').textContent = best.name);
+          if (span) span.textContent = best.name;
+        }
       }
     }
 
@@ -1284,10 +1325,12 @@
       $('progressLabel').textContent = 'Загружаю файл…';
       $('progressSubtitle').textContent = `${file.name} · ${(file.size/1024/1024).toFixed(1)} МБ`;
       $('progressDetail').textContent = '';
-      $('liveCard').classList.add('hidden');
+      $('transcriptionCard').classList.add('hidden');
       $('liveText').textContent = '';
-      $('resultCard').classList.add('hidden');
+      $('transcriptionTitle').textContent = '🎙️ Распознаётся в реальном времени';
+      $('result').classList.add('hidden');
       $('result').value = '';
+      $('resultActions').classList.add('hidden');
       $('stats').textContent = '';
       $('wfProgress').style.width = '0%';
       setStatus('');
@@ -1301,7 +1344,12 @@
         }
         setStatus('🔄 Распознаю …');
         $('progressLabel').textContent = 'Распознаю речь';
-        $('liveCard').classList.remove('hidden');
+        $('transcriptionCard').classList.remove('hidden');
+        $('transcriptionTitle').textContent = '🎙️ Распознаётся в реальном времени';
+        $('liveText').classList.remove('hidden');
+        $('liveText').textContent = '';
+        $('result').classList.add('hidden');
+        $('resultActions').classList.add('hidden');
 
         const reader = resp.body.getReader();
         const dec = new TextDecoder();
@@ -1347,8 +1395,12 @@
               $('wfProgress').style.width = '100%';
               const text = m.payload.text || acc;
               $('result').value = text;
-              $('resultCard').classList.remove('hidden');
-              $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+              $('transcriptionTitle').textContent = '✨ Результат';
+              $('liveText').classList.add('hidden');
+              $('liveText').textContent = '';
+              $('result').classList.remove('hidden');
+              $('resultActions').classList.remove('hidden');
+              $('transcriptionCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
               const e = ((Date.now() - start) / 1000).toFixed(1);
               $('stats').textContent = `${text.length.toLocaleString('ru')} символов · ${e} с`;
               setStatus('✅ Готово', 'success');
