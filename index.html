@@ -1655,7 +1655,7 @@
           </button>
           <span class="tname"><a class="tlink" href="${API}/api/transcripts/${encodeURIComponent(t.name)}"
              target="_blank" rel="noopener" title="Открыть файл расшифровки">${esc(t.name)}</a></span>
-          <span class="tmeta">${t.size_mb} МБ · ${fmtDate(t.modified)}</span>
+          <span class="tmeta">${t.size_mb < 1 ? t.size_kb+' КБ' : t.size_mb+' МБ'} · ${fmtDate(t.modified)}</span>
           <button class="t-del" data-name="${esc(t.name)}" title="Удалить этот файл">🗑</button>
         </div>`).join('');
       updateBulkBar();

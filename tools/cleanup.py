@@ -38,13 +38,19 @@ def transcripts_dir() -> Path:
 def save_transcript(original_name: Optional[str], text: str, info: dict) -> Path:
     """Persist one transcript as a .txt file; returns the path."""
     TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
-    stem = Path(original_name or "audio").stem
-    safe = "".join(c for c in stem if c.isalnum() or c in " _-").strip() or "audio"
+    # Извлекаем имя и расширение оригинального файла
+    orig_path = Path(original_name or "audio")
+    suffix = orig_path.suffix.lower()  # напр. .mp3, .wav, .m4a
+    # Сохраняем расширение исходного файла в имени транскрипта: "stem.mp3.txt"
+    src_tag = suffix.lstrip(".") if suffix else ""  # "mp3"
+    safe = "".join(c for c in orig_path.stem if c.isalnum() or c in " _-").strip() or "audio"
     base = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    path = TRANSCRIPTS_DIR / f"{base}_{safe}.txt"
+    # Добавляем расширение исходного файла перед .txt
+    src_suffix = f".{src_tag}" if src_tag else ""
+    path = TRANSCRIPTS_DIR / f"{base}_{safe}{src_suffix}.txt"
     n = 1
     while path.exists():
-        path = TRANSCRIPTS_DIR / f"{base}_{n}_{safe}.txt"
+        path = TRANSCRIPTS_DIR / f"{base}_{n}_{safe}{src_suffix}.txt"
         n += 1
     header = [
         f"# Файл: {original_name or 'неизвестно'}",
@@ -85,6 +91,7 @@ def list_transcripts() -> list[dict[str, Any]]:
                 "name": f.name,
                 "size_bytes": st.st_size,
                 "size_mb": round(st.st_size / 1048576, 2),
+                "size_kb": round(st.st_size / 1024, 1),
                 "modified": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
             }
         )
