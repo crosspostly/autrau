@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/crosspostly/autrau/ci.yml?label=CI)](.github/workflows/ci.yml)
 
-Переводит речь из аудиофайлов (`mp3`, `wav`, `m4a`, `ogg`, `flac`, `webm`) в текст локально. Три бэкенда на выбор — 22 модели суммарно:
+Переводит речь из аудио- и видеофайлов (`mp3`, `wav`, `m4a`, `ogg`, `flac`, `webm`, `mp4`, `mkv`, `mov`) в текст локально — у видео звук извлекается автоматически (нужен ffmpeg). Три бэкенда на выбор — 22 модели суммарно:
 
 | Провайдер | Что внутри | Моделей | RAM | GPU | Особенности |
 |---|---|---|---|---|---|
