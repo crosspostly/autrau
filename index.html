@@ -280,49 +280,56 @@
     .ptag.gpu { background: rgba(192, 132, 252, 0.12); color: var(--accent-5); }
 
     /* ============================================================
-       Models list
+       Model picker (dropdown + detail panel)
        ============================================================ */
-    .model-list { display: grid; gap: 8px; }
-    .model-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 14px;
-      background: rgba(13, 17, 23, 0.4);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      transition: all 0.15s;
+    .model-picker { margin-top: 4px; }
+    .mp-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .mp-label { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+    .mp-select {
+      flex: 1; min-width: 0; max-width: 480px;
+      padding: 9px 12px;
+      background: rgba(13, 17, 23, 0.85); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 13px; font-family: inherit; cursor: pointer;
+      transition: border-color 0.15s;
     }
-    .model-row:hover { border-color: var(--border-bright); background: rgba(13, 17, 23, 0.6); }
-    .model-row.active { border-color: var(--accent); background: rgba(255, 138, 101, 0.05); }
-    .mname { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .mname code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-    .minfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-    .mdesc { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
-    .badge.met { letter-spacing: 0.5px; white-space: nowrap; }
+    .mp-select:hover { border-color: var(--border-bright); }
+    .mp-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 138, 101, 0.12); }
+    .mp-select optgroup { font-style: normal; color: var(--text-dim); background: #0d1117; }
+    .mp-select option { color: var(--text); background: #0d1117; font-size: 12px; }
+    .mp-ru {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none;
+    }
+    .mp-ru input { accent-color: var(--accent); cursor: pointer; }
+
+    .mp-detail {
+      margin-top: 14px; padding: 14px 16px;
+      background: rgba(13, 17, 23, 0.5);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      animation: fadeUp 0.25s ease-out backwards;
+    }
+    .mp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .mp-head .pmark { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .mp-head code { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+    .mdesc { font-size: 12px; color: var(--text-muted); line-height: 1.45; margin-top: 6px; }
     .badge { padding: 2px 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; font-size: 10px; color: var(--text-muted); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+    .badge.ru { background: rgba(110, 231, 183, 0.12); color: var(--accent-3); border-color: rgba(110, 231, 183, 0.3); }
+    .badge.en { background: rgba(148, 163, 184, 0.12); color: var(--text-dim); border-color: rgba(148, 163, 184, 0.3); }
+    .badge.met { letter-spacing: 0.5px; white-space: nowrap; }
+    .mp-hint {
+      margin-top: 10px; padding: 10px 12px;
+      font-size: 12.5px; color: var(--text-dim); line-height: 1.5;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+    }
+    .mp-hint b { color: var(--text); }
+    .mp-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .mp-actions .spacer { flex: 1; }
     .mstatus { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .mstatus.dl { background: rgba(110, 231, 183, 0.12); color: var(--accent-3); }
     .mstatus.nodl { background: rgba(251, 191, 36, 0.12); color: var(--warn); }
     .mstatus.update { background: rgba(255, 138, 101, 0.15); color: var(--accent); }
-
-    /* Unified model picker — groups by provider */
-    .model-group { margin-bottom: 20px; }
-    .model-group:last-child { margin-bottom: 0; }
-    .mg-head {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 12px; margin-bottom: 8px;
-      background: rgba(13, 17, 23, 0.55);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--pcolor, var(--accent));
-      border-radius: var(--radius-sm);
-    }
-    .mg-head .pmark { width: 8px; height: 8px; border-radius: 50%; background: var(--pcolor, var(--accent)); box-shadow: 0 0 10px var(--pcolor, var(--accent)); }
-    .mg-name { font-weight: 700; font-size: 13px; flex: 1; }
-    .mg-head .ptag { margin-left: 0; }
-    .badge.ru { background: rgba(110, 231, 183, 0.12); color: var(--accent-3); border-color: rgba(110, 231, 183, 0.3); }
-    .badge.en { background: rgba(148, 163, 184, 0.12); color: var(--text-dim); border-color: rgba(148, 163, 184, 0.3); }
-    .model-row.rowext { opacity: 0.8; }
-    #activeSummary { display: flex; align-items: center; gap: 6px; }
-    #activeSummary .pmark { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
     /* ============================================================
        Progress + waveform
@@ -456,6 +463,9 @@
     }
     .t-row:last-child { border-bottom: none; }
     .t-row .tname { flex: 1; word-break: break-all; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .t-row .tname .tlink { color: var(--accent-2); text-decoration: none; border-bottom: 1px dashed rgba(110, 231, 183, 0.35); }
+    .t-row .tname .tlink:hover { color: var(--accent-3); border-bottom-style: solid; }
+    .t-row .tname .tlink:visited { color: var(--accent-2); }
     .t-row .tmeta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
     .star-btn {
       background: none; border: 1px solid var(--border); border-radius: 8px;
@@ -516,22 +526,35 @@
     <div class="card">
       <h2><span class="num">1</span> Выбор модели</h2>
 
-      <div style="margin-top: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <button id="loadModel">⚙ Загрузить модель</button>
-        <button class="ghost" id="installProvider">⬇ Установить провайдер</button>
-        <span class="small" id="loadedStatus"></span>
-      </div>
-      <div class="small" id="activeSummary" style="margin-top: 10px;"></div>
+      <div class="model-picker">
+        <div class="mp-row">
+          <label class="mp-label" for="modelSelect">Модель:</label>
+          <select id="modelSelect" class="mp-select" title="Выберите модель — провайдер подставится автоматически"></select>
+          <label class="mp-ru" title="Показывать только модели, поддерживающие русский">
+            <input type="checkbox" id="onlyRu" checked> только русские
+          </label>
+        </div>
 
-      <h2 style="margin-top: 22px; display: flex; align-items: center; gap: 12px;">
-        Модели
-        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer; user-select: none;">
-          <input type="checkbox" id="onlyRu" checked style="accent-color: var(--accent); cursor: pointer;">
-          только русские
-        </label>
-        <span class="small" id="ruHidden" style="opacity:.7;"></span>
-      </h2>
-      <div class="model-list" id="modelList"><div class="small">Загрузка…</div></div>
+        <div class="mp-detail hidden" id="modelDetail">
+          <div class="mp-head">
+            <span class="pmark" id="mpMark"></span>
+            <code id="mpName"></code>
+            <span class="badge ru" id="mpLang"></span>
+            <span class="badge" id="mpMet"></span>
+            <span class="badge" id="mpSize"></span>
+            <span class="mstatus" id="mpDl"></span>
+          </div>
+          <div class="mdesc" id="mpDesc"></div>
+          <div class="mp-hint" id="mpHint"></div>
+          <div class="mp-actions">
+            <button id="mpDownload">⬇ Скачать модель</button>
+            <button id="loadModel">▶ Загрузить в память</button>
+            <button class="ghost" id="installProvider">⬇ Установить провайдер</button>
+            <span class="spacer"></span>
+            <span class="small" id="loadedStatus"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Transcription -->
@@ -731,7 +754,7 @@
         const cd = parseInt(cfg.cleanup_after_days, 10);
         $('cleanupDays').value = Number.isFinite(cd) && cd >= 0 ? cd : 0;
 
-        renderModelGroups();
+        renderModelSelect();
         updateLoadedStatus();
         $('transcribe').disabled = !state.loaded.provider;
         loadTranscripts();
@@ -741,8 +764,8 @@
     }
 
     // ===== PROVIDERS =====
-    // Выбор провайдера теперь происходит через единый список моделей
-    // (renderModelGroups) — клик по модели задаёт и провайдера.
+    // Выбор провайдера происходит через выпадающий список моделей
+    // (renderModelSelect) — выбор модели задаёт и провайдера.
 
     async function installProvider(name) {
       setStatus('⏳ Устанавливаю ' + name + ' …');
@@ -770,15 +793,17 @@
       if (state.activeProvider) installProvider(state.activeProvider);
     });
 
-    // ===== MODELS — единый выбор, сгруппированный по провайдерам =====
+    // ===== MODELS — выпадающий список, сгруппированный по провайдерам =====
     function fmtSize(mb) {
       return mb >= 1000 ? (mb / 1024).toFixed(1) + ' ГБ' : Math.round(mb) + ' МБ';
     }
 
-    function renderModelGroups() {
+    function renderModelSelect() {
       const onlyRu = $('onlyRu').checked;
-      const groups = [];
+      const sel = $('modelSelect');
+      sel.innerHTML = '';
       let hiddenTotal = 0;
+      let any = false;
       for (const p of state.providers) {
         let models = p.models;
         let hidden = 0;
@@ -789,92 +814,106 @@
           hidden = p.models.length - models.length;
         }
         hiddenTotal += hidden;
-        if (models.length === 0) continue;
-        groups.push({ p, models, hidden });
-      }
-      $('ruHidden').textContent = hiddenTotal > 0 ? `(скрыто ${hiddenTotal})` : '';
-
-      const ap = state.providers.find(x => x.name === state.activeProvider);
-      $('activeSummary').innerHTML = ap
-        ? `Выбрано: <span class="pmark" style="background:${PROVIDER_COLORS[ap.name] || 'var(--accent)'}"></span> <b>${ap.display_name}</b> · <code>${state.activeModel || '—'}</code>`
-        : 'Провайдер не выбран';
-
-      if (groups.length === 0) {
-        $('modelList').innerHTML = '<div class="small">нет русскоязычных моделей — снимите фильтр «только русские»</div>';
-        return;
-      }
-
-      const html = groups.map(({ p, models, hidden }) => {
-        const color = PROVIDER_COLORS[p.name] || 'var(--accent)';
-        const tags = [];
-        if (p.requires_gpu) tags.push('<span class="ptag gpu">GPU</span>');
-        tags.push(p.installed
-          ? '<span class="ptag ok">✓ установлен</span>'
-          : '<span class="ptag no">✗ не установлен</span>');
-        const rows = models.map(m => {
-          const active = state.activeProvider === p.name && state.activeModel === m.name;
-          const size = m.size_mb ? `<span class="badge" title="Размер скачивания">${fmtSize(m.size_mb)}</span>` : '';
-          const langTitle = (m.langs_full || []).join(', ');
-          const lang = m.lang_label
-            ? `<span class="badge ${m.russian === false ? 'en' : 'ru'}" title="Поддерживает: ${langTitle}">${m.lang_label}</span>`
-            : (m.russian === false
-                ? '<span class="badge en" title="English only">EN</span>'
-                : '<span class="badge ru">RU</span>');
+        if (!models.length) continue;
+        any = true;
+        const g = document.createElement('optgroup');
+        g.label = p.display_name
+          + (p.installed ? ' · установлен' : ' · НЕ установлен')
+          + (hidden ? ` (скрыто ${hidden})` : '');
+        for (const m of models) {
+          const o = document.createElement('option');
+          o.value = p.name + '|' + m.name;
           const met = [];
-          if (m.speed) met.push(`<span class="badge met" title="Скорость распознавания: ${m.speed}/5">⚡${'●'.repeat(m.speed)}${'○'.repeat(5 - m.speed)}</span>`);
-          if (m.accuracy) met.push(`<span class="badge met" title="Точность распознавания: ${m.accuracy}/5">${'★'.repeat(m.accuracy)}${'☆'.repeat(5 - m.accuracy)}</span>`);
-          const action = !p.installed
-            ? '<button class="tiny secondary" data-action="install">⬇ установить</button>'
-            : `<button class="tiny secondary" data-action="download" title="${m.downloaded ? 'перескачать' : 'скачать'}">${m.downloaded ? '↻' : '⬇'}</button>`;
-          return `
-            <div class="model-row ${active ? 'active' : ''} ${!p.installed ? 'rowext' : ''}"
-                 data-provider="${p.name}" data-name="${m.name}">
-              <div class="minfo">
-                <div class="mname"><code>${m.name}</code>${lang}${met.join('')}${size}</div>
-                ${m.desc ? `<div class="mdesc">${m.desc}</div>` : ''}
-              </div>
-              <span class="mstatus ${m.downloaded ? 'dl' : 'nodl'}">${m.downloaded ? '✓ готово' : 'не скачана'}</span>
-              ${action}
-            </div>`;
-        }).join('');
-        return `
-          <div class="model-group" data-provider="${p.name}">
-            <div class="mg-head" style="--pcolor:${color}" title="${p.description}">
-              <span class="pmark"></span>
-              <span class="mg-name">${p.display_name}</span>
-              ${tags.join('')}
-              ${hidden > 0 ? `<span class="small" style="opacity:.6;">скрыто ${hidden}</span>` : ''}
-            </div>
-            ${rows}
-          </div>`;
-      }).join('');
-      $('modelList').innerHTML = html;
+          if (m.speed) met.push('⚡' + '●'.repeat(m.speed) + '○'.repeat(5 - m.speed));
+          if (m.accuracy) met.push('★'.repeat(m.accuracy) + '☆'.repeat(5 - m.accuracy));
+          o.textContent = `${m.name} · ${fmtSize(m.size_mb || 0)} · ${m.lang_label || '—'}`
+            + (met.length ? ' · ' + met.join(' ') : '')
+            + (m.downloaded ? ' · ✓ скачана' : '');
+          if (state.activeProvider === p.name && state.activeModel === m.name) o.selected = true;
+          g.appendChild(o);
+        }
+        sel.appendChild(g);
+      }
+      sel.title = hiddenTotal > 0 ? `скрыто ${hiddenTotal} моделей (фильтр «только русские»)` : '';
+      if (!any) {
+        const o = document.createElement('option');
+        o.textContent = 'нет моделей с русским — снимите фильтр';
+        sel.appendChild(o);
+      }
+      updateModelDetail();
     }
 
-    // Делегирование кликов: выбор модели / скачивание / установка провайдера.
-    $('modelList').addEventListener('click', (e) => {
-      const row = e.target.closest('.model-row');
-      if (!row) return;
-      const provider = row.dataset.provider;
-      const name = row.dataset.name;
-      const btn = e.target.closest('button[data-action]');
-      if (btn) {
-        if (btn.dataset.action === 'download') { downloadModel(provider, name); return; }
-        if (btn.dataset.action === 'install') { installProvider(provider); return; }
-        return;
+    // Показывает детали выбранной модели и синхронизирует state.active*.
+    function updateModelDetail() {
+      const parts = ($('modelSelect').value || '').split('|');
+      const p = state.providers.find(x => x.name === parts[0]);
+      const m = p && p.models.find(x => x.name === parts[1]);
+      const det = $('modelDetail');
+      if (!p || !m) { det.classList.add('hidden'); return; }
+      det.classList.remove('hidden');
+
+      state.activeProvider = p.name;
+      state.activeModel = m.name;
+
+      const color = PROVIDER_COLORS[p.name] || 'var(--accent)';
+      $('mpMark').style.background = color;
+      $('mpMark').style.boxShadow = `0 0 10px ${color}`;
+      $('mpName').textContent = m.name;
+      $('mpName').title = p.display_name;
+
+      const langTitle = (m.langs_full || []).join(', ');
+      const langEl = $('mpLang');
+      langEl.textContent = m.lang_label || (m.russian === false ? 'EN only' : 'RU');
+      langEl.title = 'Поддерживает: ' + langTitle;
+      langEl.className = 'badge ' + (m.russian === false ? 'en' : 'ru');
+
+      const met = [];
+      if (m.speed) met.push('⚡' + '●'.repeat(m.speed) + '○'.repeat(5 - m.speed));
+      if (m.accuracy) met.push('★'.repeat(m.accuracy) + '☆'.repeat(5 - m.accuracy));
+      const metEl = $('mpMet');
+      metEl.textContent = met.join(' · ');
+      metEl.title = `Скорость ${m.speed || '?'}/5 · Точность ${m.accuracy || '?'}/5`;
+      metEl.className = 'badge met' + (met.length ? '' : ' hidden');
+
+      const sizeEl = $('mpSize');
+      sizeEl.textContent = m.size_mb ? fmtSize(m.size_mb) : '';
+      sizeEl.className = 'badge' + (m.size_mb ? '' : ' hidden');
+
+      const dl = $('mpDl');
+      dl.textContent = m.downloaded ? '✓ готово' : 'не скачана';
+      dl.className = 'mstatus ' + (m.downloaded ? 'dl' : 'nodl');
+
+      $('mpDesc').textContent = m.desc || p.description || '';
+
+      // Подсказка следующего шага — что делать дальше
+      const hint = $('mpHint');
+      const loaded = state.loaded.provider === p.name && state.loaded.model === m.name;
+      if (!p.installed) {
+        hint.innerHTML = `⚠️ Движок <b>${esc(p.display_name)}</b> не установлен — это программа-распознаватель, нужная для этой модели. Нажмите <b>«Установить провайдер»</b> (один раз, через pip).`;
+      } else if (!m.downloaded) {
+        hint.innerHTML = `Модель ещё не скачана на диск (${fmtSize(m.size_mb || 0)}). Нажмите <b>«Скачать модель»</b> — файлы сохранятся локально, это нужно сделать один раз.`;
+      } else if (!loaded) {
+        hint.innerHTML = 'Файлы модели на месте. Нажмите <b>«Загрузить в память»</b>, затем в шаге 2 выберите аудиофайл и нажмите <b>«Транскрибировать»</b>.';
+      } else {
+        hint.innerHTML = '✅ Модель активна. Шаг 2: выберите аудиофайл и нажмите <b>«Транскрибировать»</b>.';
       }
-      const p = state.providers.find(x => x.name === provider);
-      if (!p || !p.installed) {
-        if (p && confirm(`Провайдер «${p.display_name}» не установлен.\n\n${p.install_hint}\n\nУстановить сейчас?`)) {
-          installProvider(provider);
-        }
-        return;
+
+      const dlBtn = $('mpDownload');
+      dlBtn.textContent = '⬇ Скачать модель' + (m.size_mb ? ` (${fmtSize(m.size_mb)})` : '');
+      dlBtn.disabled = !p.installed;
+      dlBtn.title = p.installed ? 'Скачать файлы модели на диск' : 'Сначала установите провайдер';
+      dlBtn.style.display = m.downloaded ? 'none' : '';
+      $('loadModel').style.display = (!p.installed || !m.downloaded) ? 'none' : '';
+      $('installProvider').style.display = p.installed ? 'none' : '';
+    }
+
+    $('modelSelect').addEventListener('change', updateModelDetail);
+    $('mpDownload').addEventListener('click', () => {
+      if (state.activeProvider && state.activeModel) {
+        downloadModel(state.activeProvider, state.activeModel);
       }
-      state.activeProvider = provider;
-      state.activeModel = name;
-      renderModelGroups();
     });
-    $('onlyRu').addEventListener('change', renderModelGroups);
+    $('onlyRu').addEventListener('change', renderModelSelect);
 
     async function downloadModel(provider, model) {
       setStatus('⏳ Скачиваю ' + model + ' …');
@@ -956,8 +995,10 @@
     function updateLoadedStatus() {
       const l = state.loaded;
       $('loadedStatus').innerHTML = l.provider
-        ? `Загружено: <code>${l.provider}/${l.model}</code> · <code>${l.device}</code>`
-        : '<span class="small">в памяти ничего не загружено</span>';
+        ? `Активна: <code>${l.model}</code> · <code>${l.device}</code>`
+        : 'Модель пока не загружена в память';
+      // Панель деталей может быть открыта — обновим подсказку
+      if (!$('modelDetail').classList.contains('hidden')) updateModelDetail();
     }
 
     // ===== DROPZONE =====
@@ -1253,7 +1294,8 @@
                   title="${t.is_favorite ? 'Убрать из избранного — файл снова удаляется штатно' : 'Добавить в избранное — не будет удаляться авто-очисткой'}">
             ${t.is_favorite ? '★' : '☆'}
           </button>
-          <span class="tname">${esc(t.name)}</span>
+          <span class="tname"><a class="tlink" href="${API}/api/transcripts/${encodeURIComponent(t.name)}"
+             target="_blank" rel="noopener" title="Открыть файл расшифровки">${esc(t.name)}</a></span>
           <span class="tmeta">${t.size_mb} МБ · ${fmtDate(t.modified)}</span>
         </div>`).join('');
     }

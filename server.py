@@ -8,6 +8,7 @@ Endpoints:
   POST /api/config                update config
   POST /api/cleanup               delete transcripts older than N days (0 = nothing)
   GET  /api/transcripts           list transcripts + favorite flags (prunes dead favorites)
+  GET  /api/transcripts/{name}    download/open one transcript .txt file
   POST /api/favorites             toggle/set favorite (favorites survive cleanup)
   GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
@@ -32,7 +33,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 # Add project root to path so `providers` and `tools` resolve when started directly
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -186,6 +187,25 @@ async def api_transcripts() -> dict:
     return {"transcripts": items, "count": len(items)}
 
 
+@app.get("/api/transcripts/{name}")
+async def api_transcript_file(name: str) -> Any:
+    """Serve one saved transcript .txt file.
+
+    The name is sanitized via `Path.name` to prevent path traversal, then
+    resolved inside `data/transcripts/`.
+    """
+    safe = Path(name).name
+    path = clean.transcripts_dir().joinpath(safe)
+    if not path.is_file():
+        raise HTTPException(404, f"Расшифровка '{name}' не найдена")
+    return FileResponse(
+        path,
+        media_type="text/plain; charset=utf-8",
+        filename=safe,
+        content_disposition_type="inline",  # открыть в новой вкладке, а не «сохранить файл»
+    )
+
+
 @app.post("/api/favorites")
 async def api_favorites(payload: dict) -> dict:
     """Toggle or explicitly set favorite status for one transcript.
@@ -320,7 +340,10 @@ async def api_model_download(payload: dict) -> StreamingResponse:
 
     def producer() -> None:
         try:
-            path = p.download_model(model, on_progress=_enqueue)
+            # download_model calls on_progress(percent, message) — adapt to SSE events.
+            def on_progress(percent: float, message: str) -> None:
+                _enqueue("progress", int(percent), message)
+            path = p.download_model(model, on_progress=on_progress)
             _enqueue("done", 100, str(path))
         except Exception as e:
             _enqueue("error", 0, f"{type(e).__name__}: {e}")
