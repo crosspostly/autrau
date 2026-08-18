@@ -624,9 +624,6 @@
         <div class="mp-row">
           <label class="mp-label" for="modelSelect">Модель:</label>
           <select id="modelSelect" class="mp-select" title="Выберите модель — провайдер подставится автоматически"></select>
-          <label class="mp-ru" title="Показывать только модели, поддерживающие русский">
-            <input type="checkbox" id="onlyRu" checked> только русские
-          </label>
         </div>
 
         <div class="mp-detail hidden" id="modelDetail">
@@ -975,7 +972,7 @@
     }
 
     function renderModelSelect() {
-      const onlyRu = $('onlyRu').checked;
+      const onlyRu = false; // русский фильтр убран
       const sel = $('modelSelect');
       sel.innerHTML = '';
       let hiddenTotal = 0;
@@ -1090,7 +1087,7 @@
         downloadModel(state.activeProvider, state.activeModel);
       }
     });
-    $('onlyRu').addEventListener('change', renderModelSelect);
+
 
     // Пресеты — выбор модели в 1 клик
     const PRESET_KEYS = { fast: ['tiny'], balanced: ['tiny'], thorough: ['large-v3'] };
