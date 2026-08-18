@@ -5,11 +5,13 @@ from .base import Provider, ProviderInfo, Segment, registry
 from .faster_whisper import FasterWhisperProvider
 from .whisper_cpp import WhisperCppProvider
 from .parakeet import ParakeetProvider
+from .parakeet_onnx import ParakeetOnnxProvider
 
 # Auto-register on import. Order = display order in UI.
 registry.register(FasterWhisperProvider())
 registry.register(WhisperCppProvider())
 registry.register(ParakeetProvider())
+registry.register(ParakeetOnnxProvider())
 
 __all__ = [
     "Provider",
@@ -19,4 +21,5 @@ __all__ = [
     "FasterWhisperProvider",
     "WhisperCppProvider",
     "ParakeetProvider",
+    "ParakeetOnnxProvider",
 ]

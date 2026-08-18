@@ -13,15 +13,16 @@
 | **Faster-Whisper** *(по умолчанию)* | CTranslate2 | 15 | 2 ГБ | опц. | CPU и GPU, многоязычный |
 | **Whisper.cpp** | pywhispercpp (C++ биндинги) | 5 | 1 ГБ | нет | Без PyTorch, очень лёгкий |
 | **Parakeet TDT v3** | NVIDIA NeMo | 2 | 4 ГБ | **да** | SOTA 2025–2026, 25 европейских языков |
+| **Parakeet v3 (ONNX/DirectML)** | onnx-asr + DirectML | 1 | 1.5 ГБ | любой GPU/CPU | Тот же SOTA без CUDA: DirectX на любом GPU |
 
 Модели скачиваются напрямую с официальных реестров Hugging Face:
-`Systran/faster-whisper-*`, `deepdml/faster-whisper-large-v3-turbo-ct2`, `ggerganov/whisper.cpp` (ggml-`*.bin`), `nvidia/parakeet-tdt-0.6b-v3`.
+`Systran/faster-whisper-*`, `deepdml/faster-whisper-large-v3-turbo-ct2`, `ggerganov/whisper.cpp` (ggml-`*.bin`), `nvidia/parakeet-tdt-0.6b-v3`, `istupakov/parakeet-tdt-0.6b-v3-onnx` (int8, ~640 МБ).
 
 ---
 
 ## ✨ Возможности
 
-- 🧠 **22 модели** — от `tiny` (75 МБ) до `large-v3` (2.9 ГБ) и дистиллированных EN-вариантов
+- 🧠 **23 модели** — от `tiny` (75 МБ) до `large-v3` (2.9 ГБ) и дистиллированных EN-вариантов
 - 📡 **SSE-прогресс** — и транскрибация, и проверка обновлений стримят прогресс в реальном времени
 - 🔄 **Авто-обновления** — проверка новых коммитов приложения и новых версий моделей
 - 🧹 **Авто-очистка расшифровок** — старые расшифровки удаляются автоматически по возрасту (или вручную)
@@ -59,6 +60,9 @@ pip install pywhispercpp
 
 # Parakeet v3 — нужен NVIDIA GPU + CUDA
 pip install -r requirements-parakeet.txt
+
+# Parakeet v3 (ONNX/DirectML) — без NVIDIA: любой GPU через DirectX или CPU
+pip install onnx-asr[hub] onnxruntime-directml
 ```
 
 ## 🎧 Использование
@@ -118,7 +122,8 @@ autrau/
 │   ├── base.py            # Provider ABC + реестр (registry)
 │   ├── faster_whisper.py  # CTranslate2 (по умолчанию)
 │   ├── whisper_cpp.py     # pywhispercpp
-│   └── parakeet.py        # NVIDIA NeMo
+│   ├── parakeet.py        # NVIDIA NeMo
+│   └── parakeet_onnx.py   # Parakeet v3 через ONNX/DirectML (без CUDA)
 ├── tools/
 │   ├── config.py          # persistent user config (data/config.json)
 │   ├── check.py           # диагностика (python -m tools.check)
@@ -179,6 +184,12 @@ autrau/
 - **Откуда:** `huggingface.co/nvidia/parakeet-tdt-0.6b-v3`.
 <!-- VERIFY: Лицензия модели Parakeet — CC BY 4.0 (коммерческое использование разрешено) -->
 
+### Parakeet v3 (ONNX/DirectML) — 1 модель
+- **Когда выбрать:** тот же SOTA, но без NVIDIA: ускоряется через DirectX (DirectML) на **любом** GPU (AMD/Intel/NVIDIA) или работает на CPU.
+- **Установка:** `pip install onnx-asr[hub] onnxruntime-directml` (лёгкая, без PyTorch/NeMo).
+- **Модели:** `parakeet-tdt-0.6b-v3` — мультиязычная (25 языков, включая русский), int8-квантование (~640 МБ).
+- **Откуда:** `huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx` (ONNX-экспорт, CC BY 4.0).
+
 ## 🔌 HTTP API
 
 | Метод | Путь | Описание |
@@ -221,7 +232,7 @@ publish.bat <your-github-username>
 | Проблема | Решение |
 |---|---|
 | `ffmpeg not found` | `winget install Gyan.FFmpeg` и перезапустить терминал |
-| Parakeet не ставится | Нужен NVIDIA GPU + CUDA 12+. Проверка: `nvidia-smi` |
+| Parakeet (NeMo) не ставится | Нужен NVIDIA GPU + CUDA 12+. Проверка: `nvidia-smi`. Без NVIDIA используйте **Parakeet v3 (ONNX/DirectML)** — работает на любом GPU/CPU |
 | `faster-whisper` ошибка импорта | Обновите pip: `python -m pip install -U pip` |
 | UI не обновляется | `Ctrl+F5` (hard reload) |
 | `git pull failed` | Есть локальные изменения: `git stash` → `update.bat` → `git stash pop` |
