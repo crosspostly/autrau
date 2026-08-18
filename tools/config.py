@@ -26,6 +26,11 @@ DEFAULTS: dict[str, Any] = {
     "check_updates_on_start": True,
     "auto_update_app": False,           # self-update on start
     "cleanup_after_days": 0,            # 0 = keep transcripts forever; N>0 = auto-delete older than N days
+
+    # v1.5: Voice memos + hotkey
+    "hotkey": "Ctrl+Shift+R",           # global hotkey to start/stop voice recording
+    "voice_memo_dir": "data/voice-memos/",  # where to save voice memos
+    "voice_memo_cleanup_after_days": 7, # 0 = keep forever; N>0 = auto-delete older than N days
 }
 
 
