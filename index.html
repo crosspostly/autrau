@@ -236,6 +236,22 @@
       border: 1px solid rgba(110, 231, 183, 0.2); border-radius: var(--radius-sm);
       margin-top: 12px; font-size: 13px;
     }
+    .queue-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      font-size: 13px; margin-bottom: 6px;
+      border: 1px solid var(--border);
+    }
+    .queue-item.pending { background: rgba(255,255,255,0.03); }
+    .queue-item.running { background: rgba(255, 138, 101, 0.1); border-color: rgba(255, 138, 101, 0.3); }
+    .queue-item.done { background: rgba(110, 231, 183, 0.08); border-color: rgba(110, 231, 183, 0.2); }
+    .queue-item .qi-icon { font-size: 16px; width: 20px; text-align: center; }
+    .queue-item .qi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .queue-item .qi-size { color: var(--text-muted); font-size: 12px; }
+    .queue-item .qi-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+    .queue-item .qi-remove:hover { color: var(--error); background: rgba(248, 113, 113, 0.1); }
+    .qi-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,138,101,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .file-info .fi-name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-info .fi-size { color: var(--text-muted); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
 
@@ -609,14 +625,18 @@
 
       <div class="dropzone" id="dropzone">
         <div class="dz-icon">📁</div>
-        <div class="dz-title">Перетащите аудиофайл сюда</div>
-        <div class="dz-hint">или нажмите, чтобы выбрать · mp3, wav, m4a, ogg, flac · видео mp4, webm, mkv</div>
-        <input type="file" id="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4,.aac,.mkv,.mov,.avi,.m4v,.3gp">
+        <div class="dz-title">Перетащите файлы сюда</div>
+        <div class="dz-hint">или нажмите, чтобы выбрать несколько · mp3, wav, m4a, ogg, flac · видео mp4, webm, mkv</div>
+        <input type="file" id="file" multiple accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4,.aac,.mkv,.mov,.avi,.m4v,.3gp">
       </div>
-      <div id="fileInfo" class="file-info hidden">
-        <span>🎵</span>
-        <span class="fi-name" id="fileName"></span>
-        <span class="fi-size" id="fileSize"></span>
+
+      <!-- Очередь файлов -->
+      <div id="queueSection" class="hidden" style="margin-top: 12px;">
+        <div id="queueList"></div>
+        <div class="queue-actions" style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
+          <button class="secondary" id="btnAddMore">+ Добавить ещё</button>
+          <button id="btnStartQueue" class="primary" style="flex:1;">▶ Транскрибировать всё</button>
+        </div>
       </div>
 
       <div class="row" style="margin-top: 16px;">
@@ -783,6 +803,9 @@
       activeProvider: null,
       activeModel: null,
       loaded: { provider: null, model: null, device: null },
+      queue: [], // [{id, file, status:'pending'|'running'|'done'}]
+      queueIdCounter: 0,
+      queueRunning: false,
     };
 
     // ===== INIT =====
@@ -1017,10 +1040,9 @@
       if (!$('modelDetail').classList.contains('hidden')) updateModelDetail();
     }
 
-    // ===== DROPZONE =====
+    // ===== DROPZONE + QUEUE =====
     const dropzone = $('dropzone');
     const fileInput = $('file');
-    const fileInfo = $('fileInfo');
     dropzone.addEventListener('click', (e) => {
       if (e.target.tagName !== 'INPUT') fileInput.click();
     });
@@ -1031,26 +1053,83 @@
       dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
     });
     dropzone.addEventListener('drop', (e) => {
-      const f = e.dataTransfer.files[0];
-      if (f) {
-        // Use DataTransfer to set file input
-        const dt = new DataTransfer();
-        dt.items.add(f);
-        fileInput.files = dt.files;
-        fileInput.dispatchEvent(new Event('change'));
-      }
+      e.preventDefault();
+      addFilesToQueue([...e.dataTransfer.files]);
     });
     fileInput.addEventListener('change', () => {
-      const f = fileInput.files[0];
-      if (f) {
-        $('fileName').textContent = f.name;
-        $('fileSize').textContent = (f.size / 1024 / 1024).toFixed(2) + ' МБ';
-        fileInfo.classList.remove('hidden');
-        drawWaveform(f);
-      } else {
-        fileInfo.classList.add('hidden');
-      }
+      addFilesToQueue([...fileInput.files]);
+      // Reset input so same files can be re-added
+      fileInput.value = '';
     });
+
+    function addFilesToQueue(files) {
+      const AUDIO_EXTS = ['.mp3','.wav','.m4a','.ogg','.flac','.aac','.webm','.mp4','.mkv','.mov','.avi','.m4v','.3gp'];
+      for (const f of files) {
+        const ext = '.' + f.name.split('.').pop().toLowerCase();
+        if (!AUDIO_EXTS.includes(ext)) continue;
+        state.queue.push({ id: ++state.queueIdCounter, file: f, status: 'pending' });
+      }
+      renderQueue();
+    }
+
+    function renderQueue() {
+      const section = $('queueSection');
+      const list = $('queueList');
+      if (state.queue.length === 0) {
+        section.classList.add('hidden');
+        return;
+      }
+      section.classList.remove('hidden');
+      list.innerHTML = '';
+      for (const item of state.queue) {
+        const el = document.createElement('div');
+        el.className = `queue-item ${item.status}`;
+        const icon = item.status === 'done' ? '✅' : item.status === 'running' ? '' : '🎵';
+        const spinner = item.status === 'running' ? '<div class="qi-spinner"></div>' : '';
+        const remove = item.status === 'pending' ? '<button class="qi-remove" title="Убрать из очереди" data-id="'+item.id+'">✕</button>' : '';
+        el.innerHTML = '<span class="qi-icon">'+icon+spinner+'</span><span class="qi-name" title="'+item.file.name+'">'+item.file.name+'</span><span class="qi-size">'+(item.file.size/1024/1024).toFixed(1)+' МБ</span>'+remove;
+        list.appendChild(el);
+      }
+      // Remove buttons
+      list.querySelectorAll('.qi-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = parseInt(btn.dataset.id);
+          state.queue = state.queue.filter(q => q.id !== id);
+          renderQueue();
+        });
+      });
+      // Show/hide start button
+      const pending = state.queue.filter(q => q.status === 'pending').length;
+      const running = state.queue.some(q => q.status === 'running');
+      $('btnStartQueue').disabled = pending === 0 || running;
+      $('btnStartQueue').textContent = running ? '⏳ Идёт транскрибация…' : pending === 0 ? '✅ Всё готово' : '▶ Транскрибировать всё (' + pending + ')';
+    }
+
+    $('btnAddMore').addEventListener('click', () => fileInput.click());
+    $('btnStartQueue').addEventListener('click', startQueue);
+
+    function startQueue() {
+      const pending = state.queue.filter(q => q.status === 'pending');
+      if (pending.length === 0 || state.queueRunning) return;
+      processNextInQueue();
+    }
+
+    function processNextInQueue() {
+      const next = state.queue.find(q => q.status === 'pending');
+      if (!next) {
+        state.queueRunning = false;
+        renderQueue();
+        return;
+      }
+      state.queueRunning = true;
+      next.status = 'running';
+      renderQueue();
+      transcribeFile(next.file, () => {
+        next.status = 'done';
+        renderQueue();
+        processNextInQueue();
+      });
+    }
 
     // ===== WAVEFORM =====
     let _audioBuffer = null;
@@ -1110,10 +1189,20 @@
     }
 
     // ===== TRANSCRIBE =====
-    $('transcribe').addEventListener('click', transcribe);
-    async function transcribe() {
-      const file = $('file').files[0];
-      if (!file) { setStatus('Выберите аудиофайл', 'error'); return; }
+    $('transcribe').addEventListener('click', () => {
+      // Если уже есть pending — запускаем очередь, иначе single file
+      const pending = state.queue.filter(q => q.status === 'pending');
+      if (pending.length > 0) {
+        startQueue();
+      } else if (state.queue.length === 0) {
+        // No files selected
+        $('dropzone').classList.add('dragover');
+        setTimeout(() => $('dropzone').classList.remove('dragover'), 300);
+        setStatus('Выберите файлы для транскрибации', 'error');
+      }
+    });
+
+    async function transcribeFile(file, onDone) {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('language', $('lang').value);
@@ -1208,11 +1297,13 @@
         $('micIcon').className = 'mic-icon error';
         $('progressLabel').textContent = 'Ошибка';
       } finally {
-        // Перечитаем модель и обновим кнопку (state.loaded мог измениться)
+        const pending = state.queue.filter(q => q.status === 'pending');
         const parts = ($('modelSelect').value || '').split('|');
-        const p = state.providers.find(x => x.name === parts[0]);
-        const m = p && p.models.find(x => x.name === parts[1]);
-        $('transcribe').disabled = !(m && m.downloaded);
+        const prov = state.providers.find(x => x.name === parts[0]);
+        const mod = prov && prov.models.find(x => x.name === parts[1]);
+        // Кнопка активна если есть pending и модель скачана
+        $('transcribe').disabled = !(pending.length > 0 && mod && mod.downloaded);
+        if (onDone) onDone();
       }
     }
 
