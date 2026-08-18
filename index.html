@@ -1167,6 +1167,17 @@
               $('progressFill').style.width = p + '%';
               $('progressPct').textContent = p + '%';
               $('wfProgress').style.width = p + '%';
+              // Определяем фазу по структуре payload
+              // Extraction: payload.text содержит "🎬 извлекаю звук …"
+              // Transcription: payload.start/payload.end присутствуют (сегмент)
+              if (m.payload && m.payload.start !== undefined) {
+                // Транскрипция — показываем общий прогресс, сегменты ниже
+                if ($('progressLabel').textContent.startsWith('🎬')) {
+                  $('progressLabel').textContent = '🎙 Распознаётся в реальном времени';
+                }
+              } else if (m.payload && m.payload.text && m.payload.text.includes('🎬')) {
+                $('progressLabel').textContent = '🎬 Извлечение звука';
+              }
               if (m.payload && m.payload.text) {
                 acc += (acc && !acc.endsWith(' ') ? ' ' : '') + m.payload.text;
                 $('liveText').textContent = acc;
