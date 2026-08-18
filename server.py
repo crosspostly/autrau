@@ -245,7 +245,12 @@ async def api_provider_install(payload: dict) -> dict:
         raise HTTPException(404, f"Провайдер '{name}' не найден. "
                                  f"Доступные: {registry.names()}")
     log_cb = []
-    ok = p.install(on_log=lambda m: log_cb.append(m))
+    # Run the install off the event loop: pip can take minutes and must not
+    # freeze the whole server (health/providers/etc. would all time out).
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(
+        None, lambda: p.install(on_log=lambda m: log_cb.append(m))
+    )
     return {"ok": ok, "log": log_cb[-50:]}
 
 
