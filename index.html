@@ -807,7 +807,6 @@
 
         renderModelSelect();
         updateLoadedStatus();
-        $('transcribe').disabled = !state.loaded.provider;
         loadTranscripts();
       } catch (e) {
         setStatus('⚠️ сервер не отвечает. Запустите start.bat', 'error');
@@ -953,6 +952,8 @@
       dlBtn.title = p.installed ? 'Скачать файлы модели на диск' : 'Сначала установите провайдер';
       dlBtn.style.display = m.downloaded ? 'none' : '';
       $('installProvider').style.display = p.installed ? 'none' : '';
+      // Кнопка активна когда модель выбрана и скачана (lazy load — загрузится по клику)
+      $('transcribe').disabled = !m.downloaded;
     }
 
     $('modelSelect').addEventListener('change', updateModelDetail);
@@ -1198,7 +1199,11 @@
         $('micIcon').className = 'mic-icon error';
         $('progressLabel').textContent = 'Ошибка';
       } finally {
-        $('transcribe').disabled = !state.loaded.provider;
+        // Перечитаем модель и обновим кнопку (state.loaded мог измениться)
+        const parts = ($('modelSelect').value || '').split('|');
+        const p = state.providers.find(x => x.name === parts[0]);
+        const m = p && p.models.find(x => x.name === parts[1]);
+        $('transcribe').disabled = !(m && m.downloaded);
       }
     }
 
