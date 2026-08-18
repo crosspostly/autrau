@@ -868,16 +868,20 @@
       const PRESET_KEYS = {
         fast:     ['tiny', 'base'],
         balanced: ['small', 'medium'],
-        thorough: ['large', 'large-v2', 'large-v3'],
+        thorough: ['large-v3', 'large-v2', 'large', 'medium'],
       };
       const PRESET_ICONS = { fast: '⚡', balanced: '⚖', thorough: '🎯' };
       const PRESET_NAMES  = { fast: 'Быстрая', balanced: 'Сбалансированная', thorough: 'Тщательная' };
+
+      // Размерный ранг whisper-моделей для осмысленных fallback'ов
+      const _SIZE_RANK = { 'tiny': 1, 'base': 2, 'small': 3, 'medium': 4, 'large': 5, 'large-v2': 6, 'large-v3': 7 };
 
       for (const [preset, keys] of Object.entries(PRESET_KEYS)) {
         const btn = $(`preset${preset.charAt(0).toUpperCase() + preset.slice(1)}`);
         if (!btn) continue;
         const span = btn.querySelector('.preset-speed');
-        // Находим лучшую скачанную модель по preset
+
+        // 1) точное попадание по preset → max accuracy
         let best = null, bestAcc = -1;
         for (const p of state.providers) {
           if (!p.installed) continue;
@@ -889,7 +893,25 @@
             }
           }
         }
-        // Fallback: лучшая скачанная без фильтра
+
+        // 2) fallback: крупнейшая из скачанных whisper-моделей
+        if (!best) {
+          let bestSize = -1;
+          for (const p of state.providers) {
+            if (!p.installed || !p.name.includes('whisper')) continue;
+            for (const m of p.models) {
+              if (!m.downloaded) continue;
+              // определяем размер по имени модели
+              let sz = 0;
+              for (const [kw, r] of Object.entries(_SIZE_RANK)) {
+                if (m.name.includes(kw)) { sz = r; break; }
+              }
+              if (sz > bestSize) { bestSize = sz; best = m; }
+            }
+          }
+        }
+
+        // 3) последний fallback: модель с max accuracy
         if (!best) {
           for (const p of state.providers) {
             if (!p.installed) continue;
@@ -900,6 +922,7 @@
             }
           }
         }
+
         if (best) {
           btn.querySelector('span:last-child') && (btn.querySelector('span:last-child').textContent = best.name);
           if (span) span.textContent = best.name;
@@ -1059,7 +1082,7 @@
     $('onlyRu').addEventListener('change', renderModelSelect);
 
     // Пресеты — выбор модели в 1 клик
-    const PRESET_KEYS = { fast: ['tiny','base'], balanced: ['small','medium','medium-ct2'], thorough: ['large','large-v2','large-v3','medium','medium-ct2'] };
+    const PRESET_KEYS = { fast: ['tiny','base'], balanced: ['small','medium','medium-ct2'], thorough: ['large-v3','large-v2','large','medium','medium-ct2'] };
     document.querySelectorAll('.preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const preset = btn.dataset.preset;
