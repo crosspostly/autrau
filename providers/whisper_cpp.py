@@ -78,6 +78,8 @@ class WhisperCppProvider(Provider):
                 "name": name,
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
+                "languages": None,   # all whisper.cpp models here are multilingual (incl. ru)
+                "russian": True,
                 "downloaded": local.exists(),
                 "local_path": str(local),
                 "source_url": f"https://huggingface.co/{_REPO}/resolve/main/{fname}",

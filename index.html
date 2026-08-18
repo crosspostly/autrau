@@ -500,7 +500,14 @@
         <span class="small" id="loadedStatus"></span>
       </div>
 
-      <h2 style="margin-top: 22px;">Модели</h2>
+      <h2 style="margin-top: 22px; display: flex; align-items: center; gap: 12px;">
+        Модели
+        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer; user-select: none;">
+          <input type="checkbox" id="onlyRu" checked style="accent-color: var(--accent); cursor: pointer;">
+          только русские
+        </label>
+        <span class="small" id="ruHidden" style="opacity:.7;"></span>
+      </h2>
       <div class="model-list" id="modelList"><div class="small">выберите провайдера</div></div>
     </div>
 
@@ -782,7 +789,19 @@
       const p = state.providers.find(x => x.name === state.activeProvider);
       if (!p) { $('modelList').innerHTML = '<div class="small">провайдер не выбран</div>'; return; }
       if (p.models.length === 0) { $('modelList').innerHTML = '<div class="small">нет моделей</div>'; return; }
-      const html = p.models.map(m => `
+      const onlyRu = $('onlyRu').checked;
+      let models = p.models;
+      if (onlyRu) {
+        // Filter out English-only models; the active model always stays visible.
+        models = p.models.filter(m => m.russian !== false || state.activeModel === m.name);
+      }
+      const hidden = p.models.length - models.length;
+      $('ruHidden').textContent = hidden > 0 ? `(скрыто ${hidden})` : '';
+      if (models.length === 0) {
+        $('modelList').innerHTML = '<div class="small">нет русскоязычных моделей — снимите фильтр «только русские»</div>';
+        return;
+      }
+      const html = models.map(m => `
         <div class="model-row ${state.activeModel === m.name ? 'active' : ''}" data-name="${m.name}">
           <div class="mname">
             <code>${m.name}</code>
@@ -805,6 +824,7 @@
         });
       });
     }
+    $('onlyRu').addEventListener('change', renderModels);
 
     async function downloadModel(provider, model) {
       setStatus('⏳ Скачиваю ' + model + ' …');

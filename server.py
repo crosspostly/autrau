@@ -216,7 +216,7 @@ async def api_providers() -> dict:
         avail, why = p.is_available()
         out.append({
             "name": p.info.name,
-            "display": p.info.display_name,
+            "display_name": p.info.display_name,
             "description": p.info.description,
             "requires_gpu": p.info.requires_gpu,
             "installed": avail,

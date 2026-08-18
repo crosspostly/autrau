@@ -106,6 +106,7 @@ class ParakeetProvider(Provider):
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
                 "languages": langs,
+                "russian": langs is None or "ru" in langs,
                 "downloaded": cache.exists() and any(cache.rglob("*.nemo")),
                 "local_path": str(cache),
                 "source_url": f"https://huggingface.co/{repo}",

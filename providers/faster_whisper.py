@@ -92,6 +92,7 @@ class FasterWhisperProvider(Provider):
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
                 "languages": langs,
+                "russian": langs is None,  # None = multilingual (incl. ru); "en" = English-only
                 "downloaded": local.exists(),
                 "local_path": str(local),
                 "source_url": f"https://huggingface.co/{repo}",

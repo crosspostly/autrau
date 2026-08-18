@@ -44,7 +44,7 @@
 }
 ```
 
-`GET /api/providers` — массив провайдеров: `name`, `display`, `description`, `requires_gpu`, `installed`, `reason`, `install_hint`, `default_model`, `models` (с `size_mb`, `downloaded`, `source_url`), `languages`, `homepage` + блок `active` с текущим выбором.
+`GET /api/providers` — массив провайдеров: `name`, `display_name`, `description`, `requires_gpu`, `installed`, `reason`, `install_hint`, `default_model`, `models` (с `size_mb`, `downloaded`, `source_url`, `languages`, `russian` — флаг «поддерживает русский»), `languages`, `homepage` + блок `active` с текущим выбором.
 
 `POST /api/config` — тело — произвольный набор ключей из конфигурации; обновляются только известные ключи (см. [CONFIGURATION.md](CONFIGURATION.md)):
 
