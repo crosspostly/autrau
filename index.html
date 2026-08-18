@@ -249,6 +249,7 @@
     .queue-item .qi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .queue-item .qi-size { color: var(--text-muted); font-size: 12px; }
     .queue-item .qi-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+    .queue-item .qi-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
     .queue-item .qi-remove:hover { color: var(--error); background: rgba(248, 113, 113, 0.1); }
     .qi-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,138,101,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -662,6 +663,14 @@
 
       <!-- Очередь файлов -->
       <div id="queueSection" class="hidden" style="margin-top: 12px;">
+        <div class="queue-header" style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-dim);">
+            <input type="checkbox" id="queueSelectAll" title="Выбрать все">
+            <span id="queueSelCount" style="color:var(--text-muted);">Выбрать все</span>
+          </label>
+          <span class="spacer"></span>
+          <button class="danger secondary" id="queueBulkDelete" style="display:none;" disabled>🗑 Удалить выбранные</button>
+        </div>
         <div id="queueList"></div>
         <div class="queue-actions" style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
           <button class="secondary" id="btnAddMore">+ Добавить ещё</button>
@@ -1209,6 +1218,8 @@
       const list = $('queueList');
       if (state.queue.length === 0) {
         section.classList.add('hidden');
+        _queueSel.clear();
+        _updateQueueSelUI();
         return;
       }
       section.classList.remove('hidden');
@@ -1218,14 +1229,20 @@
         el.className = `queue-item ${item.status}`;
         const icon = item.status === 'done' ? '✅' : item.status === 'running' ? '' : '🎵';
         const spinner = item.status === 'running' ? '<div class="qi-spinner"></div>' : '';
-        const remove = item.status === 'pending' ? '<button class="qi-remove" title="Убрать из очереди" data-id="'+item.id+'">✕</button>' : '';
-        el.innerHTML = '<span class="qi-icon">'+icon+spinner+'</span><span class="qi-name" title="'+item.file.name+'">'+item.file.name+'</span><span class="qi-size">'+(item.file.size/1024/1024).toFixed(1)+' МБ</span>'+remove;
+        const checked = _queueSel.has(item.id) ? 'checked' : '';
+        el.innerHTML =
+          '<input type="checkbox" class="qi-check" data-id="'+item.id+'" '+checked+'>' +
+          '<span class="qi-icon">'+icon+spinner+'</span>' +
+          '<span class="qi-name" title="'+item.file.name+'">'+item.file.name+'</span>' +
+          '<span class="qi-size">'+(item.file.size/1024/1024).toFixed(1)+' МБ</span>' +
+          (item.status === 'pending' ? '<button class="qi-remove" title="Убрать из очереди" data-id="'+item.id+'">✕</button>' : '');
         list.appendChild(el);
       }
       // Remove buttons
       list.querySelectorAll('.qi-remove').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = parseInt(btn.dataset.id);
+          _queueSel.delete(id);
           state.queue = state.queue.filter(q => q.id !== id);
           renderQueue();
         });
@@ -1546,6 +1563,52 @@
       if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
       return many;
     }
+
+    const _queueSel = new Set();   // id файлов, отмеченных в очереди
+
+    function _updateQueueSelUI() {
+      const n = _queueSel.size;
+      const total = state.queue.length;
+      const $selAll = $('queueSelectAll');
+      const $btnDel = $('queueBulkDelete');
+      const $lbl = $('queueSelCount');
+      $selAll.checked = n > 0 && n === total;
+      $selAll.indeterminate = n > 0 && n < total;
+      $lbl.textContent = n === 0 ? 'Выбрать все' : n === total ? 'Снять всё' : `Выбрано: ${n}`;
+      $btnDel.style.display = n > 0 ? '' : 'none';
+      $btnDel.disabled = n === 0;
+      $btnDel.textContent = '🗑 Удалить выбранные' + (n > 0 ? ' ('+n+')' : '');
+    }
+
+    $('queueSelectAll').addEventListener('change', () => {
+      if ($('queueSelectAll').checked) {
+        state.queue.forEach(q => _queueSel.add(q.id));
+      } else {
+        _queueSel.clear();
+      }
+      // обновить чекбоксы без полного перерендера
+      $('queueList').querySelectorAll('.qi-check').forEach(cb => {
+        cb.checked = _queueSel.has(parseInt(cb.dataset.id));
+      });
+      _updateQueueSelUI();
+    });
+
+    $('queueList').addEventListener('change', e => {
+      if (e.target.classList.contains('qi-check')) {
+        const id = parseInt(e.target.dataset.id);
+        if (e.target.checked) _queueSel.add(id); else _queueSel.delete(id);
+        _updateQueueSelUI();
+      }
+    });
+
+    $('queueBulkDelete').addEventListener('click', () => {
+      const ids = [..._queueSel];
+      if (!ids.length) return;
+      if (!confirm('Удалить ' + ids.length + ' файл(ов) из очереди?')) return;
+      state.queue = state.queue.filter(q => !_queueSel.has(q.id));
+      _queueSel.clear();
+      renderQueue();
+    });
 
     const selectedSet = new Set();   // имена файлов, отмеченных галочкой
 
