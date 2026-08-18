@@ -75,7 +75,7 @@ call "%VENV_ACT%" >nul 2>&1
 "%VENV_PY%" -c "import fastapi, uvicorn, multipart" >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo [setup] Installing base deps (this may take a few minutes) ...
+    echo [setup] Installing base deps ^(this may take a few minutes^) ...
     "%VENV_PY%" -m pip install --upgrade pip
     "%VENV_PY%" -m pip install -r requirements.txt
     if errorlevel 1 (
