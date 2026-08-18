@@ -300,6 +300,22 @@
        Model picker (dropdown + detail panel)
        ============================================================ */
     .model-picker { margin-top: 4px; }
+    .preset-bar {
+      display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .preset-btn {
+      flex: 1; min-width: 0; padding: 8px 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: rgba(255,255,255,0.03);
+      color: var(--text-dim); font-size: 12px; font-weight: 600;
+      cursor: pointer; text-align: center; transition: all 0.15s;
+      user-select: none;
+    }
+    .preset-btn:hover { border-color: var(--accent); color: var(--text); }
+    .preset-btn.active {
+      border-color: var(--accent); background: rgba(255, 138, 101, 0.12);
+      color: var(--accent);
+    }
+    .preset-btn .preset-speed { font-size: 10px; opacity: 0.7; display: block; margin-top: 2px; }
     .mp-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .mp-label { font-size: 13px; font-weight: 600; color: var(--text-dim); }
     .mp-select {
@@ -590,6 +606,20 @@
       <h2><span class="num">1</span> Выбор модели</h2>
 
       <div class="model-picker">
+        <div class="preset-bar">
+          <button class="preset-btn" data-preset="fast" id="presetFast">
+            ⚡ Быстрая
+            <span class="preset-speed">tiny · base</span>
+          </button>
+          <button class="preset-btn" data-preset="balanced" id="presetBalanced">
+            ⚖ Сбалансированная
+            <span class="preset-speed">small · medium</span>
+          </button>
+          <button class="preset-btn" data-preset="thorough" id="presetThorough">
+            🎯 Тщательная
+            <span class="preset-speed">large · large-v3</span>
+          </button>
+        </div>
         <div class="mp-row">
           <label class="mp-label" for="modelSelect">Модель:</label>
           <select id="modelSelect" class="mp-select" title="Выберите модель — провайдер подставится автоматически"></select>
@@ -986,6 +1016,42 @@
       }
     });
     $('onlyRu').addEventListener('change', renderModelSelect);
+
+    // Пресеты — выбор модели в 1 клик
+    const PRESET_KEYS = { fast: ['tiny','base'], balanced: ['small','medium','medium-ct2'], thorough: ['large','large-v2','large-v3','medium','medium-ct2'] };
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = btn.dataset.preset;
+        const keys = PRESET_KEYS[preset] || [];
+        // Собираем все скачанные модели
+        const candidates = [];
+        for (const p of state.providers) {
+          if (!p.installed) continue;
+          for (const m of p.models) {
+            if (!m.downloaded) continue;
+            candidates.push({ p, m });
+          }
+        }
+        if (candidates.length === 0) return;
+        // Ищем модель по ключевым словам в порядке приоритета
+        let best = null;
+        for (const key of keys) {
+          const found = candidates.find(c => c.m.name.toLowerCase().includes(key));
+          if (found && !best) best = found;
+        }
+        // Fallback: лучшая по accuracy среди скачанных
+        if (!best) {
+          best = candidates.sort((a, b) => (b.m.accuracy || 0) - (a.m.accuracy || 0))[0];
+        }
+        // Устанавливаем dropdown
+        const val = best.p.name + '|' + best.m.name;
+        $('modelSelect').value = val;
+        // Снимаем active со всех
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        updateModelDetail();
+      });
+    });
 
     async function downloadModel(provider, model) {
       setStatus('⏳ Скачиваю ' + model + ' …');
