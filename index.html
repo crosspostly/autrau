@@ -890,7 +890,7 @@
         // 1) точное попадание по preset → max accuracy
         let best = null, bestAcc = -1;
         for (const p of state.providers) {
-          if (!p.installed) continue;
+          if (!p.installed || p.name === 'faster-whisper') continue;
           for (const m of p.models) {
             if (!m.downloaded) continue;
             if (keys.some(k => m.name.includes(k))) {
@@ -978,8 +978,8 @@
       let hiddenTotal = 0;
       let any = false;
       for (const p of state.providers) {
-        // Показываем только установленные провайдеры
-        if (!p.installed) continue;
+        // Показываем только установленные провайдеры, кроме faster-whisper (CPU-only, бесполезен на AMD GPU)
+        if (!p.installed || p.name === 'faster-whisper') continue;
         let models = p.models;
         let hidden = 0;
         if (onlyRu) {
@@ -1098,7 +1098,7 @@
         // Собираем все скачанные модели
         const candidates = [];
         for (const p of state.providers) {
-          if (!p.installed) continue;
+          if (!p.installed || p.name === 'faster-whisper') continue;
           for (const m of p.models) {
             if (!m.downloaded) continue;
             candidates.push({ p, m });
