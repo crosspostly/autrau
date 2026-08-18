@@ -27,6 +27,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -58,6 +59,12 @@ log = logging.getLogger("autrau.server")
 HOST = os.environ.get("AUTRAU_HOST", "127.0.0.1")
 PORT = int(os.environ.get("AUTRAU_PORT", "8000"))
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
+
+# Video containers — перед распознаванием у них извлекается аудиодорожка (ffmpeg).
+VIDEO_EXTS = {
+    ".mp4", ".m4v", ".mkv", ".mov", ".avi", ".webm",
+    ".flv", ".wmv", ".mpg", ".mpeg", ".ts", ".mts", ".3gp",
+}
 
 # ---- App ----
 
@@ -182,6 +189,26 @@ def _open_in_file_manager(path: Path) -> None:
         subprocess.Popen(["open", str(path)])
     else:
         subprocess.Popen(["xdg-open", str(path)])
+
+
+def _extract_audio(video_path: Path) -> Path:
+    """Извлечь аудиодорожку из видео в 16 кГц моно WAV (через ffmpeg)."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError(
+            "для видео нужен ffmpeg — установите его и перезапустите приложение"
+        )
+    out = Path(f"{video_path}.wav")
+    proc = subprocess.run(
+        [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+         "-i", str(video_path), "-vn", "-ac", "1", "-ar", "16000", str(out)],
+        capture_output=True, text=True, timeout=600,
+    )
+    if proc.returncode != 0 or not out.is_file():
+        raise RuntimeError(
+            f"не удалось извлечь звук из видео (ffmpeg): {proc.stderr.strip()[-300:]}"
+        )
+    return out
 
 
 # ---- Transcripts & favorites ----
@@ -533,11 +560,16 @@ async def transcribe(
             pass
 
     def producer() -> None:
+        audio_path = tmp_path
         try:
+            if tmp_path.suffix.lower() in VIDEO_EXTS:
+                _enqueue("progress", 0, {"text": "🎬 извлекаю звук из видео …"})
+                audio_path = _extract_audio(tmp_path)
+
             def on_seg(seg: Segment, percent: int) -> None:
                 _enqueue("progress", percent, seg.__dict__)
 
-            out = p.transcribe(tmp_path, language or cfg.get("language", "ru"),
+            out = p.transcribe(audio_path, language or cfg.get("language", "ru"),
                                on_segment=on_seg)
             try:
                 clean.save_transcript(file.filename, out.get("text", ""),
@@ -549,6 +581,11 @@ async def transcribe(
             log.exception("Transcribe failed")
             _enqueue("error", 0, f"{type(e).__name__}: {e}")
         finally:
+            if audio_path != tmp_path:
+                try:
+                    os.unlink(audio_path)
+                except OSError:
+                    pass
             try:
                 os.unlink(tmp_path)
             except OSError:

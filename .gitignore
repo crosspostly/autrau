@@ -51,6 +51,8 @@ _audit.py
 _repro.py
 _test_favorites.py
 _api_check2.py
+_mp4_check.py
+_upd_check.py
 _ui_check.js
 _ui_extract.py
 server_test*.err

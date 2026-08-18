@@ -83,7 +83,11 @@ def check_all_updates(
     models: list[dict] = []
     try:
         from providers import registry
-        pairs = [(p, m) for p in registry.all() for m in p.info.models]
+        # Проверяем только модели, которые реально скачаны на диск:
+        # незагруженные ни на что не влияют, а HF-запросы по 20 моделям
+        # делают проверку медленной.
+        pairs = [(p, m) for p in registry.all() for m in p.info.models
+                 if p.is_model_downloaded(m)]
         total = len(pairs)
         for i, (p, m) in enumerate(pairs, 1):
             cb({"phase": "model", "provider": p.info.name, "model": m,
