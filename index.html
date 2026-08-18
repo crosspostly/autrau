@@ -800,6 +800,12 @@
         по условию «старше N дней». Снимите ★ — файл снова удаляется штатно.
       </div>
       <div class="small" style="margin-bottom: 10px;" id="transcriptsDir"></div>
+      <div id="transcriptsSelectAll" style="margin-bottom: 8px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-dim);">
+          <input type="checkbox" id="transSelectAll" title="Выбрать все файлы">
+          <span id="transSelCount" style="color:var(--text-muted);">Выбрать все</span>
+        </label>
+      </div>
       <div id="transcriptsList">
         <div class="small">Загрузка…</div>
       </div>
@@ -1608,25 +1614,37 @@
     });
 
     const selectedSet = new Set();   // имена файлов, отмеченных галочкой
+    let transItems = [];             // текущий список расшифровок
 
     function updateBulkBar() {
       const n = selectedSet.size;
       $('bulkBar').classList.toggle('hidden', n === 0);
       $('bulkCount').textContent = `Выбрано: ${n} ${plural(n, 'файл', 'файла', 'файлов')}`;
       $('bulkDelete').textContent = `🗑 Удалить выбранные (${n})`;
+      // sync select-all checkbox
+      const $cb = $('transSelectAll');
+      const total = transItems.length;
+      $cb.checked = total > 0 && n === total;
+      $cb.indeterminate = n > 0 && n < total;
     }
 
     function renderTranscripts(items) {
+      transItems = items;
       const wrap = $('transcriptsList');
+      const selAll = $('transcriptsSelectAll');
       // убираем отметки для файлов, которых уже нет
       const alive = new Set(items.map(t => t.name));
       for (const name of [...selectedSet]) if (!alive.has(name)) selectedSet.delete(name);
       if (!items.length) {
+        selAll.classList.add('hidden');
         wrap.innerHTML =
           '<div class="small">Пока нет расшифровок — после распознавания файл появится здесь.</div>';
         updateBulkBar();
         return;
       }
+      selAll.classList.remove('hidden');
+      $('transSelectAll').checked = false;
+      $('transSelectAll').indeterminate = false;
       wrap.innerHTML = items.map(t => `
         <div class="t-row${selectedSet.has(t.name) ? ' selected' : ''}">
           <input type="checkbox" class="t-check" data-name="${esc(t.name)}"
@@ -1674,6 +1692,8 @@
 
     async function loadTranscripts() {
       const st = $('transcriptsStatus');
+      $('transSelectAll').checked = false;
+      $('transSelectAll').indeterminate = false;
       try {
         const r = await fetch(API + '/api/transcripts');
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1722,6 +1742,29 @@
       } catch (err) {
         st.textContent = '❌ ' + err.message;
       }
+    });
+
+    // Выбрать все / снять все для расшифровок
+    $('transSelectAll').addEventListener('change', () => {
+      const cb = $('transSelectAll');
+      if (cb.checked) {
+        transItems.forEach(t => {
+          selectedSet.add(t.name);
+          const el = document.querySelector(`.t-check[data-name="${CSS.escape(t.name)}"]`);
+          if (el) el.checked = true;
+          const row = el ? el.closest('.t-row') : null;
+          if (row) row.classList.add('selected');
+        });
+      } else {
+        transItems.forEach(t => {
+          selectedSet.delete(t.name);
+          const el = document.querySelector(`.t-check[data-name="${CSS.escape(t.name)}"]`);
+          if (el) el.checked = false;
+          const row = el ? el.closest('.t-row') : null;
+          if (row) row.classList.remove('selected');
+        });
+      }
+      updateBulkBar();
     });
 
     $('transcriptsList').addEventListener('change', (e) => {
