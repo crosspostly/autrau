@@ -470,9 +470,29 @@
     .t-row .tname .tlink:visited { color: var(--accent-2); }
     .t-row .tmeta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
     .t-check {
-      width: 16px; height: 16px; accent-color: var(--accent-3); cursor: pointer;
-      flex: none; margin: 0;
+      -webkit-appearance: none; appearance: none;
+      width: 19px; height: 19px; flex: none; margin: 0; cursor: pointer;
+      position: relative; box-sizing: border-box;
+      border: 1.5px solid var(--border-bright); border-radius: 6px;
+      background: rgba(255, 255, 255, 0.03);
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s;
     }
+    .t-check:hover { border-color: var(--accent-3); box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.12); }
+    .t-check:active { transform: scale(0.88); }
+    .t-check:focus-visible { outline: 2px solid var(--accent-3); outline-offset: 2px; }
+    .t-check::after {
+      content: ''; position: absolute;
+      left: 5px; top: 2px; width: 5px; height: 9px;
+      border: solid var(--bg); border-width: 0 2px 2px 0;
+      transform: rotate(45deg) scale(0); opacity: 0;
+      transition: transform 0.14s ease-out, opacity 0.14s ease-out;
+    }
+    .t-check:checked {
+      background: linear-gradient(135deg, var(--accent-3), #34d399);
+      border-color: transparent;
+      box-shadow: 0 0 12px rgba(110, 231, 183, 0.35);
+    }
+    .t-check:checked::after { transform: rotate(45deg) scale(1); opacity: 1; }
     .star-btn {
       background: none; border: 1px solid var(--border); border-radius: 8px;
       width: 34px; height: 34px; cursor: pointer; font-size: 16px; line-height: 1;
@@ -1404,6 +1424,13 @@
     }
 
     $('transcriptsList').addEventListener('click', async (e) => {
+      // клик по строке (не по кнопкам/ссылке/самой галочке) — переключить отметку
+      const row = e.target.closest('.t-row');
+      if (row && !e.target.closest('.tlink, .star-btn, .t-del, .t-check')) {
+        const cb = row.querySelector('.t-check');
+        if (cb) cb.click();
+        return;
+      }
       const delBtn = e.target.closest('.t-del');
       if (delBtn) {
         const name = delBtn.dataset.name;
