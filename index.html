@@ -1167,15 +1167,13 @@
               $('progressFill').style.width = p + '%';
               $('progressPct').textContent = p + '%';
               $('wfProgress').style.width = p + '%';
-              // Определяем фазу по структуре payload
-              // Extraction: payload.text содержит "🎬 извлекаю звук …"
-              // Transcription: payload.start/payload.end присутствуют (сегмент)
-              if (m.payload && m.payload.start !== undefined) {
-                // Транскрипция — показываем общий прогресс, сегменты ниже
-                if ($('progressLabel').textContent.startsWith('🎬')) {
-                  $('progressLabel').textContent = '🎙 Распознаётся в реальном времени';
-                }
-              } else if (m.payload && m.payload.text && m.payload.text.includes('🎬')) {
+              // Надёжная смена фазы: extraction→transcription
+              // После extraction=100% transcription начинается сразу — меняем label
+              const lbl = $('progressLabel').textContent;
+              if (p >= 100 && lbl.startsWith('🎬')) {
+                $('progressLabel').textContent = '🎙 Распознаётся в реальном времени';
+              } else if (lbl === 'Распознаю речь' && m.payload && m.payload.text && m.payload.text.includes('🎬')) {
+                // Первое событие extraction — ещё не переключили label
                 $('progressLabel').textContent = '🎬 Извлечение звука';
               }
               if (m.payload && m.payload.text) {
