@@ -29,10 +29,6 @@ _REPO = "ggerganov/whisper.cpp"
 # (name, speed 1..5, accuracy 1..5) — 5/1 = быстрее всего / менее точная
 _RATINGS = {
     "tiny": (5, 1),
-    "base": (4, 2),
-    "small": (3, 3),
-    "medium": (2, 4),
-    "large-v3-turbo": (2, 4),
     "large-v3": (1, 5),
 }
 
@@ -40,10 +36,6 @@ _RATINGS = {
 #   Мультиязычные модели Whisper (99 языков, incl. ru) — как у faster-whisper.
 _MODELS = [
     ("tiny", 75, "Самая быстрая, низкая точность — для черновых проверок", "ggml-tiny.bin"),
-    ("base", 142, "Для коротких записей", "ggml-base.bin"),
-    ("small", 466, "Баланс скорости и качества", "ggml-small.bin"),
-    ("medium", 1500, "Высокая точность", "ggml-medium.bin"),
-    ("large-v3-turbo", 1500, "Large-v3 обрезанный — почти та же точность, но вдвое быстрее", "ggml-large-v3-turbo.bin"),
     ("large-v3", 2900, "Самая точная (рекомендуется), но медленная", "ggml-large-v3.bin"),
 ]
 MODELS_DIR = Path(__file__).resolve().parent.parent / "data" / "models" / "whisper-cpp"

@@ -609,15 +609,15 @@
         <div class="preset-bar">
           <button class="preset-btn" data-preset="fast" id="presetFast">
             ⚡ Быстрая
-            <span class="preset-speed">tiny · base</span>
+            <span class="preset-speed">tiny</span>
           </button>
           <button class="preset-btn" data-preset="balanced" id="presetBalanced">
             ⚖ Сбалансированная
-            <span class="preset-speed">small · medium</span>
+            <span class="preset-speed">tiny</span>
           </button>
           <button class="preset-btn" data-preset="thorough" id="presetThorough">
             🎯 Тщательная
-            <span class="preset-speed">large-v3 · large-v3-turbo</span>
+            <span class="preset-speed">large-v3</span>
           </button>
         </div>
         <div class="mp-row">
@@ -866,9 +866,9 @@
     // ===== ПРЕСЕТЫ — обновляем лейблы под реально скачанные модели =====
     function updatePresetLabels() {
       const PRESET_KEYS = {
-        fast:     ['tiny', 'base'],
-        balanced: ['small', 'medium'],
-        thorough: ['large-v3', 'large-v3-turbo', 'large-v2', 'large', 'medium'],
+        fast:     ['tiny'],
+        balanced: ['tiny'],
+        thorough: ['large-v3'],
       };
       const PRESET_ICONS = { fast: '⚡', balanced: '⚖', thorough: '🎯' };
       const PRESET_NAMES  = { fast: 'Быстрая', balanced: 'Сбалансированная', thorough: 'Тщательная' };
@@ -1082,7 +1082,7 @@
     $('onlyRu').addEventListener('change', renderModelSelect);
 
     // Пресеты — выбор модели в 1 клик
-    const PRESET_KEYS = { fast: ['tiny','base'], balanced: ['small','medium','medium-ct2'], thorough: ['large-v3','large-v3-turbo','large-v2','large','medium','medium-ct2'] };
+    const PRESET_KEYS = { fast: ['tiny'], balanced: ['tiny'], thorough: ['large-v3'] };
     document.querySelectorAll('.preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const preset = btn.dataset.preset;
