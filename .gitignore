@@ -59,3 +59,6 @@ server_test*.log
 /Scripts/
 /pyvenv.cfg
 
+
+# Accidental root venv backup (created by broken start.bat; see commit 3d38cb1)
+_venv-junk-backup/
