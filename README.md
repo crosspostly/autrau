@@ -229,7 +229,7 @@ autrau/
 | `POST` | `/api/updates/app` | self-update (git pull + pip upgrade) |
 | `POST` | `/api/model/download` | скачать модель (SSE) |
 | `GET` | `/api/model/check` | проверить обновление одной модели |
-| `POST` | `/api/provider/load` | загрузить модель в память |
+| `POST` | `/api/provider/load` | вручную прогреть модель в память (UI сам лениво грузит при первой расшифровке) |
 | `POST` | `/api/provider/install` | pip install провайдера |
 | `POST` | `/transcribe` | транскрибация (SSE-поток) |
 

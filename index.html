@@ -594,7 +594,6 @@
           <div class="mp-hint" id="mpHint"></div>
           <div class="mp-actions">
             <button id="mpDownload">⬇ Скачать модель</button>
-            <button id="loadModel">▶ Загрузить в память</button>
             <button class="ghost" id="installProvider">⬇ Установить провайдер</button>
             <span class="spacer"></span>
             <span class="small" id="loadedStatus"></span>
@@ -946,10 +945,8 @@
         hint.innerHTML = `⚠️ Движок <b>${esc(p.display_name)}</b> не установлен — это программа-распознаватель, нужная для этой модели. Нажмите <b>«Установить провайдер»</b> (один раз, через pip).`;
       } else if (!m.downloaded) {
         hint.innerHTML = `Модель ещё не скачана на диск (${fmtSize(m.size_mb || 0)}). Нажмите <b>«Скачать модель»</b> — файлы сохранятся локально, это нужно сделать один раз.`;
-      } else if (!loaded) {
-        hint.innerHTML = 'Файлы модели на месте. Нажмите <b>«Загрузить в память»</b>, затем в шаге 2 выберите аудиофайл и нажмите <b>«Транскрибировать»</b>.';
       } else {
-        hint.innerHTML = '✅ Модель активна. Шаг 2: выберите аудиофайл и нажмите <b>«Транскрибировать»</b>.';
+        hint.innerHTML = `✅ Всё готово: модель <b>${esc(m.name)}</b> на месте. Выберите аудиофайл ниже и нажмите <b>«Транскрибировать»</b> — модель загрузится автоматически.`;
       }
 
       const dlBtn = $('mpDownload');
@@ -957,7 +954,6 @@
       dlBtn.disabled = !p.installed;
       dlBtn.title = p.installed ? 'Скачать файлы модели на диск' : 'Сначала установите провайдер';
       dlBtn.style.display = m.downloaded ? 'none' : '';
-      $('loadModel').style.display = (!p.installed || !m.downloaded) ? 'none' : '';
       $('installProvider').style.display = p.installed ? 'none' : '';
     }
 
@@ -1013,44 +1009,11 @@
       }
     }
 
-    // ===== LOAD MODEL =====
-    $('loadModel').addEventListener('click', async () => {
-      if (!state.activeProvider || !state.activeModel) {
-        setStatus('Выберите провайдера и модель', 'warn');
-        return;
-      }
-      $('loadModel').disabled = true;
-      setStatus('⏳ Загружаю модель в память …');
-      try {
-        const r = await fetch(API + '/api/provider/load', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider: state.activeProvider,
-            model: state.activeModel,
-            device: 'cpu',
-          }),
-        });
-        const j = await r.json();
-        if (j.ok) {
-          state.loaded = j.loaded;
-          updateLoadedStatus();
-          $('transcribe').disabled = false;
-          setStatus('✅ Модель готова', 'success');
-        } else {
-          setStatus('❌ ' + (j.detail || JSON.stringify(j)), 'error');
-        }
-      } catch (e) {
-        setStatus('❌ ' + e.message, 'error');
-      } finally {
-        $('loadModel').disabled = false;
-      }
-    });
-
     function updateLoadedStatus() {
       const l = state.loaded;
       $('loadedStatus').innerHTML = l.provider
         ? `Активна: <code>${l.model}</code> · <code>${l.device}</code>`
-        : 'Модель пока не загружена в память';
+        : 'Модель загрузится автоматически при первой расшифровке';
       // Панель деталей может быть открыта — обновим подсказку
       if (!$('modelDetail').classList.contains('hidden')) updateModelDetail();
     }
