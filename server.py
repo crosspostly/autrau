@@ -31,9 +31,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -191,23 +192,85 @@ def _open_in_file_manager(path: Path) -> None:
         subprocess.Popen(["xdg-open", str(path)])
 
 
-def _extract_audio(video_path: Path) -> Path:
-    """Извлечь аудиодорожку из видео в 16 кГц моно WAV (через ffmpeg)."""
+def _probe_duration(video_path: Path) -> float | None:
+    """Длительность медиа в секундах через ffprobe. None, если ffprobe недоступен."""
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return None
+    try:
+        proc = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)],
+            capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return None
+        return float(proc.stdout.strip())
+    except (ValueError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def _extract_audio(video_path: Path,
+                   on_progress: "Callable[[int, str], None] | None" = None
+                   ) -> Path:
+    """Извлечь аудиодорожку из видео в 16 кГц моно WAV (через ffmpeg).
+
+    Если передан on_progress(percent, text) — вызывается по ходу извлечения.
+    percent считается от total секунд (полученных через ffprobe); если
+    длительность неизвестна — шлём 0% старт, без промежуточных обновлений.
+    """
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError(
             "для видео нужен ffmpeg — установите его и перезапустите приложение"
         )
     out = Path(f"{video_path}.wav")
-    proc = subprocess.run(
-        [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-         "-i", str(video_path), "-vn", "-ac", "1", "-ar", "16000", str(out)],
-        capture_output=True, text=True, timeout=600,
-    )
-    if proc.returncode != 0 or not out.is_file():
+    total = _probe_duration(video_path)
+    cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+           "-progress", "pipe:1",
+           "-i", str(video_path), "-vn", "-ac", "1", "-ar", "16000", str(out)]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, bufsize=1)
+    last_pct = -1
+    last_emit = 0.0
+    try:
+        if on_progress is not None and total and total > 0:
+            on_progress(0, "🎬 извлекаю звук из видео … 0%")
+        for raw in proc.stdout:
+            line = raw.strip()
+            if not line.startswith("out_time_us="):
+                continue
+            if total is None or total <= 0:
+                continue
+            try:
+                us = int(line.split("=", 1)[1])
+            except ValueError:
+                continue
+            pct = min(99, max(0, int(us / 1_000_000 / total * 100)))
+            now = time.monotonic()
+            if pct != last_pct and (now - last_emit) >= 0.25:
+                last_pct = pct
+                last_emit = now
+                if on_progress is not None:
+                    on_progress(pct, f"🎬 извлекаю звук из видео … {pct}%")
+        rc = proc.wait(timeout=600)
+    finally:
+        if proc.stdout:
+            proc.stdout.close()
+        if proc.stderr:
+            proc.stderr.close()
+    if rc != 0 or not out.is_file():
+        stderr = b""
+        try:
+            stderr = proc.stderr.read().encode("utf-8", errors="replace") if proc.stderr else b""
+        except Exception:
+            pass
         raise RuntimeError(
-            f"не удалось извлечь звук из видео (ffmpeg): {proc.stderr.strip()[-300:]}"
+            f"не удалось извлечь звук из видео (ffmpeg rc={rc}): "
+            f"{stderr[-300:].decode('utf-8', errors='replace')}"
         )
+    if on_progress is not None:
+        on_progress(100, "🎬 извлекаю звук из видео … 100%")
     return out
 
 
@@ -582,8 +645,9 @@ async def transcribe(
         audio_path = tmp_path
         try:
             if tmp_path.suffix.lower() in VIDEO_EXTS:
-                _enqueue("progress", 0, {"text": "🎬 извлекаю звук из видео …"})
-                audio_path = _extract_audio(tmp_path)
+                def _on_audio_pct(percent: int, text: str) -> None:
+                    _enqueue("progress", percent, {"text": text})
+                audio_path = _extract_audio(tmp_path, on_progress=_on_audio_pct)
 
             def on_seg(seg: Segment, percent: int) -> None:
                 _enqueue("progress", percent, seg.__dict__)

@@ -55,6 +55,8 @@ _mp4_check.py
 _upd_check.py
 _limit_check.py
 _limit_cfg.json
+_probe_check.py
+_e2e_video_progress.py
 _ui_check.js
 _ui_extract.py
 server_test*.err
