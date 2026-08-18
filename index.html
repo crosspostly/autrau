@@ -1257,15 +1257,18 @@
               $('progressPct').textContent = p + '%';
               $('wfProgress').style.width = p + '%';
               // Надёжная смена фазы: extraction→transcription
-              // После extraction=100% transcription начинается сразу — меняем label
               const lbl = $('progressLabel').textContent;
               if (p >= 100 && lbl.startsWith('🎬')) {
                 $('progressLabel').textContent = '🎙 Распознаётся в реальном времени';
               } else if (lbl === 'Распознаю речь' && m.payload && m.payload.text && m.payload.text.includes('🎬')) {
-                // Первое событие extraction — ещё не переключили label
                 $('progressLabel').textContent = '🎬 Извлечение звука';
               }
-              if (m.payload && m.payload.text) {
+              // Для extraction показываем только процент (без мусора в detail)
+              if (m.payload && m.payload.text && m.payload.text.includes('🎬')) {
+                $('progressDetail').textContent = p + '%';
+              }
+              // Только сегменты с реальным текстом — в liveText
+              if (m.payload && m.payload.text && m.payload.start !== undefined) {
                 acc += (acc && !acc.endsWith(' ') ? ' ' : '') + m.payload.text;
                 $('liveText').textContent = acc;
                 $('liveText').scrollTop = $('liveText').scrollHeight;
