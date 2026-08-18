@@ -11,6 +11,13 @@ Endpoints:
   GET  /api/transcripts/{name}    download/open one transcript .txt file
   DELETE /api/transcripts         delete selected transcripts (body: {"names": [...]})
   POST /api/transcripts/open-folder  open the transcripts folder in the file manager
+  GET  /api/voice-memos           list voice memos (from data/voice-memos/)
+  GET  /api/voice-memos/{name}    download/open one voice memo .txt file
+  DELETE /api/voice-memos         delete selected voice memos (body: {"names": [...]})
+  POST /api/voice-memos/open-folder  open the voice-memos folder
+  POST /api/voice/start           start a voice-memo recording session (returns {id})
+  POST /api/voice/chunk           append audio chunk to active session (multipart audio/webm)
+  POST /api/voice/stop            finalize session → transcribe → save to voice-memos/
   POST /api/favorites             toggle/set favorite (favorites survive cleanup)
   GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
@@ -27,12 +34,15 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -377,6 +387,153 @@ async def api_favorites(payload: dict) -> dict:
     else:
         state = fav.toggle(name)
     return {"name": name, "is_favorite": state}
+
+
+# ---- Voice memos (v1.5) ----
+@app.get("/api/voice-memos")
+async def api_voice_memos() -> dict:
+    """List voice memos from data/voice-memos/."""
+    items = clean.list_voice_memos()
+    return {"voice_memos": items, "count": len(items), "dir": str(clean.voice_memos_dir())}
+
+
+@app.get("/api/voice-memos/{name}")
+async def api_voice_memo_file(name: str) -> Any:
+    """Serve one voice memo .txt file."""
+    safe = Path(name).name
+    path = clean.voice_memos_dir().joinpath(safe)
+    if not path.is_file():
+        raise HTTPException(404, f"Голосовая заметка '{name}' не найдена")
+    return FileResponse(
+        path, media_type="text/plain; charset=utf-8",
+        filename=safe,
+    )
+
+
+@app.delete("/api/voice-memos")
+async def api_voice_memos_delete(payload: dict) -> dict:
+    """Delete selected voice memos. Body: {"names": [...]}."""
+    names = payload.get("names", [])
+    if not isinstance(names, list) or not names:
+        raise HTTPException(400, "names обязателен (list of file names)")
+    res = clean.delete_voice_memos(names)
+    return {"ok": True, **res}
+
+
+@app.post("/api/voice-memos/open-folder")
+async def api_voice_memos_open_folder() -> dict:
+    """Open the voice-memos folder in the system file manager."""
+    d = clean.voice_memos_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    try:
+        _open_in_file_manager(d)
+    except Exception as e:
+        raise HTTPException(500, f"Не удалось открыть папку: {e}")
+    return {"ok": True, "dir": str(d)}
+
+
+# ---- Voice recording session (v1.5) ----
+_voice_sessions: dict[str, dict] = {}  # id -> {started_at, chunks: [bytes]}
+_voice_lock = threading.Lock()
+
+
+@app.post("/api/voice/start")
+async def api_voice_start() -> dict:
+    """Start a new voice recording session. Returns {id, started_at}."""
+    sid = secrets.token_urlsafe(8)
+    with _voice_lock:
+        _voice_sessions[sid] = {
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "chunks": [],
+        }
+    log.info("Voice session started: %s", sid)
+    return {"id": sid, "started_at": _voice_sessions[sid]["started_at"]}
+
+
+@app.post("/api/voice/chunk")
+async def api_voice_chunk(
+    id: str = Form(...),
+    chunk: UploadFile = File(...),
+) -> dict:
+    """Append an audio chunk to the active session.
+    `chunk` is a small audio/webm (Opus) blob from MediaRecorder timeslice.
+    """
+    with _voice_lock:
+        sess = _voice_sessions.get(id)
+        if not sess:
+            raise HTTPException(404, f"Сессия '{id}' не найдена или истекла")
+        data = await chunk.read()
+        sess["chunks"].append(data)
+    return {"id": id, "received_bytes": len(data), "total_chunks": len(sess["chunks"])}
+
+
+@app.post("/api/voice/stop")
+async def api_voice_stop(payload: dict) -> dict:
+    """Finalize a voice recording session: concatenate chunks → transcribe → save.
+    Body: {"id": "...", "language": "ru"}
+    Returns: {"text": str, "file": str, "duration_sec": float}
+    """
+    sid = payload.get("id")
+    if not sid or not isinstance(sid, str):
+        raise HTTPException(400, "id обязателен")
+    language = payload.get("language") or cfg.get("language", "ru")
+    with _voice_lock:
+        sess = _voice_sessions.pop(sid, None)
+    if not sess:
+        raise HTTPException(404, f"Сессия '{sid}' не найдена или истекла")
+    chunks = sess["chunks"]
+    if not chunks:
+        raise HTTPException(400, "Сессия пуста — нет ни одного чанка")
+    # Сохраняем в temp webm, конвертируем в wav через ffmpeg
+    tmp_webm = tempfile.NamedTemporaryFile(delete=False, suffix=".webm")
+    tmp_webm_path = Path(tmp_webm.name)
+    tmp_webm.write(b"".join(chunks))
+    tmp_webm.close()
+    audio_path = tmp_webm_path
+    try:
+        try:
+            audio_path = _extract_audio(tmp_webm_path)
+        except Exception as e:
+            log.warning("ffmpeg convert failed, trying direct webm: %s", e)
+            audio_path = tmp_webm_path
+        p_name = cfg.get("provider")
+        m_name = cfg.get("model")
+        dev = cfg.get("device")
+        p = registry.get(p_name)
+        if p is None:
+            raise HTTPException(500, f"Провайдер '{p_name}' не найден")
+        if not (p.is_available()[0]):
+            raise HTTPException(500, f"Провайдер '{p_name}' не установлен")
+        # lazy-load
+        global _loaded_provider, _loaded_model, _loaded_device
+        if not (_loaded_provider == p_name and _loaded_model == m_name and _loaded_device == dev):
+            if not p.is_model_downloaded(m_name):
+                raise HTTPException(404, f"Модель {m_name} не скачана")
+            log.info("Lazy-loading %s/%s on %s …", p_name, m_name, dev)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: p.load(m_name, device=dev))
+            _loaded_provider, _loaded_model, _loaded_device = p_name, m_name, dev
+        out = p.transcribe(audio_path, language)
+        text = out.get("text", "")
+        info = out.get("info", {})
+        path = clean.save_voice_memo(text, info)
+        log.info("Voice memo saved: %s (chunks=%d)", path.name, len(chunks))
+        return {
+            "id": sid,
+            "text": text,
+            "file": path.name,
+            "dir": str(clean.voice_memos_dir()),
+        }
+    finally:
+        if audio_path != tmp_webm_path:
+            try:
+                audio_path.unlink()
+            except OSError:
+                pass
+        try:
+            tmp_webm_path.unlink()
+        except OSError:
+            pass
 
 
 # ---- Providers ----

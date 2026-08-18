@@ -27,12 +27,18 @@ log = logging.getLogger("autrau.cleanup")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TRANSCRIPTS_DIR = PROJECT_ROOT / "data" / "transcripts"
+VOICE_MEMOS_DIR = PROJECT_ROOT / "data" / "voice-memos"
 
 _DAY_SECONDS = 86400
 
 
 def transcripts_dir() -> Path:
     return TRANSCRIPTS_DIR
+
+
+def voice_memos_dir() -> Path:
+    """Папка с голосовыми заметками (отдельно от transcripts для разных политик cleanup)."""
+    return VOICE_MEMOS_DIR
 
 
 def save_transcript(original_name: Optional[str], text: str, info: dict) -> Path:
@@ -62,6 +68,74 @@ def save_transcript(original_name: Optional[str], text: str, info: dict) -> Path
     path.write_text("\n".join(header) + (text or "").strip() + "\n", encoding="utf-8")
     log.info("Saved transcript: %s", path.name)
     return path
+
+
+def save_voice_memo(text: str, info: dict) -> Path:
+    """Сохраняет голосовую заметку в data/voice-memos/.
+
+    Имя: "YYYY-MM-DD_HH-MM-SS.txt" (без префикса имени файла, потому что источник — микрофон).
+    info: {provider, model, language, duration_sec?}
+    """
+    VOICE_MEMOS_DIR.mkdir(parents=True, exist_ok=True)
+    base = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = VOICE_MEMOS_DIR / f"{base}.txt"
+    n = 1
+    while path.exists():
+        path = VOICE_MEMOS_DIR / f"{base}_{n}.txt"
+        n += 1
+    duration = info.get("duration_sec")
+    duration_str = f" ({duration:.1f} сек)" if duration else ""
+    header = [
+        "# Тип: голосовая заметка",
+        f"# Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{duration_str}",
+        f"# Модель: {info.get('provider', '?')} / {info.get('model', '?')}",
+        f"# Язык: {info.get('language', '?')}",
+        "",
+    ]
+    path.write_text("\n".join(header) + (text or "").strip() + "\n", encoding="utf-8")
+    log.info("Saved voice memo: %s", path.name)
+    return path
+
+
+def list_voice_memos() -> list[dict[str, Any]]:
+    """Список голосовых заметок (метаданные для UI)."""
+    if not VOICE_MEMOS_DIR.is_dir():
+        return []
+    result = []
+    for f in sorted(VOICE_MEMOS_DIR.iterdir(), key=lambda p: p.name, reverse=True):
+        if not f.is_file():
+            continue
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        result.append(
+            {
+                "name": f.name,
+                "size_bytes": st.st_size,
+                "size_mb": round(st.st_size / 1048576, 2),
+                "size_kb": round(st.st_size / 1024, 1),
+                "modified": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+            }
+        )
+    return result
+
+
+def delete_voice_memos(names: list[str]) -> dict[str, list[str]]:
+    """Удаляет голосовые заметки по именам файлов (с sanitization)."""
+    deleted: list[str] = []
+    missing: list[str] = []
+    for raw in names:
+        if not isinstance(raw, str) or not raw:
+            continue
+        name = Path(raw).name
+        path = VOICE_MEMOS_DIR / name
+        if not path.is_file():
+            missing.append(name)
+            continue
+        path.unlink()
+        deleted.append(name)
+    return {"deleted": deleted, "missing": missing}
 
 
 def list_files() -> list[Path]:
