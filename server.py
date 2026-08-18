@@ -542,13 +542,32 @@ async def transcribe(
             await loop.run_in_executor(None, lambda: p.load(m_name, device=dev))
             _loaded_provider, _loaded_model, _loaded_device = p_name, m_name, dev
 
-    # Save upload
+    # Save upload (с проверкой лимита MAX_UPLOAD_MB)
     suffix = Path(file.filename or "audio").suffix or ".audio"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
-    log.info("Saved upload to %s (%d bytes)", tmp_path, len(content))
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp_path = Path(tmp.name)
+    total = 0
+    try:
+        with tmp:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_UPLOAD_MB * 1024 * 1024:
+                    raise HTTPException(
+                        413,
+                        f"Файл {total / 1024 / 1024:.0f} МБ больше лимита "
+                        f"{MAX_UPLOAD_MB} МБ. Уменьшите файл или поднимите MAX_UPLOAD_MB.",
+                    )
+                tmp.write(chunk)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    log.info("Saved upload to %s (%d bytes)", tmp_path, total)
 
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_event_loop()

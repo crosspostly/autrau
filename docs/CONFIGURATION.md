@@ -9,7 +9,7 @@ Autrau настраивается двумя способами: **файл ко
 |---|---|---|---|---|
 | `AUTRAU_HOST` | нет | `127.0.0.1` | Адрес прослушивания сервера | `server.py:51` |
 | `AUTRAU_PORT` | нет | `8000` | Порт сервера | `server.py:52` |
-| `MAX_UPLOAD_MB` | нет | `500` | Максимальный размер загрузки, МБ | `server.py:53` *(объявлена, но не применяется в текущей версии)* |
+| `MAX_UPLOAD_MB` | нет | `500` | Максимальный размер загрузки, МБ; файлы больше лимита отклоняются с `413` и понятным сообщением | `server.py:61` |
 | `AUTRAU_CONFIG` | нет | `data/config.json` | Путь к файлу конфигурации | `tools/config.py:40` |
 | `HF_HOME` | нет | `~/.cache/huggingface` | Каталог кэша моделей Hugging Face (faster-whisper и parakeet) | `providers/faster_whisper.py:223`, `providers/parakeet.py:117` |
 | `AUTRAU_SKIP_UPDATE_CHECK` | нет | `0` | Пропустить проверку обновлений при старте | `start.bat` (batch-скрипт) |
