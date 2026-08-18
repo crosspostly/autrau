@@ -515,7 +515,9 @@ async def api_voice_stop(payload: dict) -> dict:
             _loaded_provider, _loaded_model, _loaded_device = p_name, m_name, dev
         out = p.transcribe(audio_path, language)
         text = out.get("text", "")
-        info = out.get("info", {})
+        info = out.get("info", {}) or {}
+        info.setdefault("provider", p_name)
+        info.setdefault("model", m_name)
         path = clean.save_voice_memo(text, info)
         log.info("Voice memo saved: %s (chunks=%d)", path.name, len(chunks))
         return {
@@ -524,6 +526,11 @@ async def api_voice_stop(payload: dict) -> dict:
             "file": path.name,
             "dir": str(clean.voice_memos_dir()),
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("Voice stop failed (sid=%s, chunks=%d)", sid, len(chunks))
+        raise HTTPException(500, f"Ошибка расшифровки: {type(e).__name__}: {e}")
     finally:
         if audio_path != tmp_webm_path:
             try:
@@ -816,8 +823,10 @@ async def transcribe(
             out = p.transcribe(audio_path, language or cfg.get("language", "ru"),
                                on_segment=on_seg)
             try:
-                clean.save_transcript(file.filename, out.get("text", ""),
-                                      out.get("info", {}))
+                _info = out.get("info", {}) or {}
+                _info.setdefault("provider", p_name)
+                _info.setdefault("model", m_name)
+                clean.save_transcript(file.filename, out.get("text", ""), _info)
             except Exception as se:
                 log.warning("Не удалось сохранить расшифровку: %s", se)
             _enqueue("done", 100, out)
