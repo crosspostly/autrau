@@ -39,6 +39,7 @@ from typing import Any, Callable, Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 # Add project root to path so `providers` and `tools` resolve when started directly
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -61,10 +62,12 @@ HOST = os.environ.get("AUTRAU_HOST", "127.0.0.1")
 PORT = int(os.environ.get("AUTRAU_PORT", "8000"))
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 
-# Video containers — перед распознаванием у них извлекается аудиодорожка (ffmpeg).
+# Video containers (и audio-only .m4a) — перед распознаванием извлекается аудиодорожка (ffmpeg).
+# .m4a = aac в mp4-контейнере; onnx-asr не всегда декодирует его нативно.
 VIDEO_EXTS = {
     ".mp4", ".m4v", ".mkv", ".mov", ".avi", ".webm",
     ".flv", ".wmv", ".mpg", ".mpeg", ".ts", ".mts", ".3gp",
+    ".m4a",  # audio-only, aac — пропускаем через ffmpeg для надёжности
 }
 
 # ---- App ----
@@ -123,6 +126,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 STATIC_DIR = PROJECT_ROOT
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR / "static")), name="static")
 
 
 # ---- HTML ----

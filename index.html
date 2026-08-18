@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <title>Autrau — локальный транскрибатор</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -688,35 +689,32 @@
       </div>
     </div>
 
-    <!-- Diagnostics & updates -->
+    <!-- Settings -->
     <div class="card">
-      <div class="tabs">
-        <div class="tab active" data-tab="updates">🔄 Обновления</div>
-        <div class="tab" data-tab="diag">🔧 Диагностика</div>
-      </div>
+      <h2><span class="num">3</span> Настройки</h2>
 
-      <div id="tab-updates">
-        <div class="actions" style="margin-bottom: 10px;">
+      <!-- Обновления приложения — внутри настроек -->
+      <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">🔄 Обновления приложения</div>
+        <div class="actions" style="margin-bottom: 8px;">
           <button class="secondary" id="checkUpdates">🔍 Проверить обновления</button>
           <button class="secondary" id="applyAppUpdate">⬇ Обновить приложение</button>
           <span class="spacer"></span>
           <span class="small" id="updateStatus"></span>
         </div>
-        <div class="progress-track hidden" id="updateProgressWrap" style="margin-bottom: 12px;">
+        <div class="progress-track hidden" id="updateProgressWrap" style="margin-bottom: 8px;">
           <div class="progress-fill" id="updateProgress"></div>
         </div>
         <div id="updatesList"><div class="small">Нажмите «Проверить обновления»</div></div>
       </div>
 
-      <div id="tab-diag" class="hidden">
-        <pre id="diagOut" style="background:rgba(13,17,23,0.6); padding:14px; border-radius:10px; overflow:auto; max-height:400px; font-size:12px; line-height:1.5; font-family:'JetBrains Mono', monospace;"></pre>
-      </div>
-    </div>
+      <!-- Диагностика — сворачиваемая -->
+      <details style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+        <summary style="cursor:pointer; font-size:12px; color:var(--text-muted); user-select:none;">🔧 Диагностика</summary>
+        <pre id="diagOut" style="background:rgba(13,17,23,0.6); padding:14px; border-radius:10px; overflow:auto; max-height:400px; font-size:12px; line-height:1.5; font-family:'JetBrains Mono', monospace; margin-top:10px;"></pre>
+      </details>
 
-    <!-- Settings -->
-    <div class="card">
-      <h2><span class="num">3</span> Настройки</h2>
-
+      <!-- Авто-очистка -->
       <div class="row">
         <div style="flex: 1 1 100%; max-width: 460px;">
           <label for="cleanupDays">Авто-очистка расшифровок</label>
@@ -1226,16 +1224,9 @@
       URL.revokeObjectURL(u);
     });
 
-    // ===== TABS =====
-    document.querySelectorAll('.tab').forEach(t => {
-      t.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-        t.classList.add('active');
-        const name = t.dataset.tab;
-        $('tab-updates').classList.toggle('hidden', name !== 'updates');
-        $('tab-diag').classList.toggle('hidden', name !== 'diag');
-        if (name === 'diag') runDiag();
-      });
+    // Диагностика — по клику на <details>, инициализируем один раз
+    document.querySelector('details').addEventListener('toggle', function() {
+      if (this.open && !$('diagOut').textContent.trim()) runDiag();
     });
 
     async function runDiag() {
