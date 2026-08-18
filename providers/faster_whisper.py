@@ -23,27 +23,54 @@ from .base import (
 log = logging.getLogger("autrau.faster_whisper")
 
 _HF_API = "https://huggingface.co/api/models"
+
+# Full language set of the multilingual Whisper models (99 languages).
+_WHISPER_LANGS = [
+    "af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs",
+    "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi",
+    "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy",
+    "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb",
+    "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt",
+    "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru",
+    "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw",
+    "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi",
+    "yi", "yo", "zh",
+]
+
+# Per-model (speed 1..5, accuracy 1..5). 5/1 = быстрее всего / менее точная.
+_RATINGS = {
+    "tiny": (5, 1), "tiny.en": (5, 1),
+    "base": (4, 2), "base.en": (4, 2),
+    "small": (3, 3), "small.en": (3, 3),
+    "medium": (2, 4), "medium.en": (2, 4),
+    "large-v1": (1, 5), "large-v2": (1, 5), "large-v3": (1, 5),
+    "large-v3-turbo": (3, 4),
+    "distil-large-v3": (3, 4),
+    "distil-medium.en": (3, 3),
+    "distil-small.en": (4, 2),
+}
+
 # (name, size_mb, description, languages, repo_override)
 #   - repo_override: if set, model lives in a different HF repo (e.g. distil-*).
 #   - languages: special tags; None = multilingual, "en" = English-only.
 _MODELS = [
-    ("tiny",            75,   "75 МБ · самая быстрая, низкая точность",          None, None),
-    ("tiny.en",         75,   "75 МБ · tiny, только English (быстрее)",        "en", None),
-    ("base",            142,  "142 МБ · для коротких записей",                  None, None),
-    ("base.en",         142,  "142 МБ · base, только English",                   "en", None),
-    ("small",           466,  "466 МБ · баланс скорости и качества",             None, None),
-    ("small.en",        466,  "466 МБ · small, только English",                  "en", None),
-    ("medium",          1500, "1.5 ГБ · высокая точность",                        None, None),
-    ("medium.en",       1500, "1.5 ГБ · medium, только English",                 "en", None),
-    ("large-v1",        2900, "2.9 ГБ · large v1",                                None, None),
-    ("large-v2",        2900, "2.9 ГБ · large v2",                                None, None),
-    ("large-v3",        2900, "2.9 ГБ · large v3 (рекомендуется)",                None, None),
+    ("tiny",            75,   "Самая быстрая, низкая точность — для черновых проверок", None, None),
+    ("tiny.en",         75,   "tiny, только English (быстрее)",                    "en", None),
+    ("base",            142,  "Для коротких записей",                              None, None),
+    ("base.en",         142,  "base, только English",                               "en", None),
+    ("small",           466,  "Баланс скорости и качества",                         None, None),
+    ("small.en",        466,  "small, только English",                              "en", None),
+    ("medium",          1500, "Высокая точность",                                    None, None),
+    ("medium.en",       1500, "medium, только English",                             "en", None),
+    ("large-v1",        2900, "Large v1",                                            None, None),
+    ("large-v2",        2900, "Large v2",                                            None, None),
+    ("large-v3",        2900, "Large v3 (рекомендуется)",                            None, None),
     # Turbo: large-v3 trained on more data, much faster, same size
-    ("large-v3-turbo",  1500, "1.5 ГБ · large v3 turbo — быстрее large-v3",      None, "deepdml/faster-whisper-large-v3-turbo-ct2"),
+    ("large-v3-turbo",  1500, "Large v3 turbo — быстрее large-v3",                  None, "deepdml/faster-whisper-large-v3-turbo-ct2"),
     # Distil-Whisper (English-only) — distilled for speed
-    ("distil-large-v3", 1500, "1.5 ГБ · Distil-Whisper large v3 (быстрее, EN)", "en", "Systran/faster-distil-whisper-large-v3"),
-    ("distil-medium.en",750,  "750 МБ · Distil-Whisper medium (EN)",            "en", "Systran/faster-distil-whisper-medium.en"),
-    ("distil-small.en", 250,  "250 МБ · Distil-Whisper small (EN)",             "en", "Systran/faster-distil-whisper-small.en"),
+    ("distil-large-v3", 1500, "Distil-Whisper large v3 (быстрее, EN)",             "en", "Systran/faster-distil-whisper-large-v3"),
+    ("distil-medium.en",750,  "Distil-Whisper medium (EN)",                        "en", "Systran/faster-distil-whisper-medium.en"),
+    ("distil-small.en", 250,  "Distil-Whisper small (EN)",                         "en", "Systran/faster-distil-whisper-small.en"),
 ]
 HF_REPO_PREFIX = "Systran/faster-whisper"
 
@@ -87,12 +114,19 @@ class FasterWhisperProvider(Provider):
         for name, size_mb, desc, langs, repo_override in _MODELS:
             local = self.model_local_path(name)
             repo = repo_override or f"{HF_REPO_PREFIX}-{name}"
+            multi = langs is None
+            speed, accuracy = _RATINGS.get(name, (3, 3))
             out.append({
                 "name": name,
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
                 "languages": langs,
-                "russian": langs is None,  # None = multilingual (incl. ru); "en" = English-only
+                "russian": multi,  # None = multilingual (incl. ru); "en" = English-only
+                "desc": desc,
+                "speed": speed,
+                "accuracy": accuracy,
+                "langs_full": _WHISPER_LANGS if multi else ["en"],
+                "lang_label": "99 языков" if multi else "EN only",
                 "downloaded": local.exists(),
                 "local_path": str(local),
                 "source_url": f"https://huggingface.co/{repo}",

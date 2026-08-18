@@ -28,27 +28,30 @@ from .faster_whisper import _pip_install
 log = logging.getLogger("autrau.parakeet")
 
 _HF_API = "https://huggingface.co/api/models"
+# name -> (hf_repo, size_mb, languages, description, speed 1..5, accuracy 1..5)
 _REPOS = {
-    # name -> (hf_repo, size_mb, languages, description)
     "parakeet-tdt-0.6b-v3": (
         "nvidia/parakeet-tdt-0.6b-v3",
         2400,
         None,  # multilingual (25 EU langs including Russian)
-        "Parakeet TDT 0.6B v3 — 25 языков (вкл. русский), SOTA 2025",
+        "SOTA 2025-2026, 25 языков (вкл. русский). Требует NVIDIA GPU + CUDA.",
+        2, 5,
     ),
     "parakeet-tdt-0.6b-v2": (
         "nvidia/parakeet-tdt-0.6b-v2",
         2400,
         ["en", "auto"],  # English-only
-        "Parakeet TDT 0.6B v2 — English-only, чуть быстрее v3",
+        "English-only, чуть быстрее v3. Требует NVIDIA GPU + CUDA.",
+        3, 4,
     ),
 }
 
+# 25 европейских языков v3 (без служебного "auto")
 _PARAKEET_LANGS = [
     "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el", "hu",
     "it", "lv", "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk",
-    "auto",
 ]
+_PARAKEET_LANGS_AUTO = _PARAKEET_LANGS + ["auto"]
 
 
 class ParakeetProvider(Provider):
@@ -99,14 +102,20 @@ class ParakeetProvider(Provider):
     # ---- model mgmt ----
     def list_models(self) -> list[dict]:
         out = []
-        for name, (repo, size_mb, langs, desc) in _REPOS.items():
+        for name, (repo, size_mb, langs, desc, speed, accuracy) in _REPOS.items():
             cache = self._hf_cache_dir(name)
+            multi = langs is None
             out.append({
                 "name": name,
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
                 "languages": langs,
-                "russian": langs is None or "ru" in langs,
+                "russian": multi or "ru" in langs,
+                "desc": desc,
+                "speed": speed,
+                "accuracy": accuracy,
+                "langs_full": _PARAKEET_LANGS if multi else ["en"],
+                "lang_label": "25 языков" if multi else "EN only",
                 "downloaded": cache.exists() and any(cache.rglob("*.nemo")),
                 "local_path": str(cache),
                 "source_url": f"https://huggingface.co/{repo}",

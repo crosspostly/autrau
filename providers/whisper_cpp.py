@@ -19,19 +19,30 @@ from .base import (
     Segment,
     SegmentCallback,
 )
-from .faster_whisper import _pip_install
+from .faster_whisper import _WHISPER_LANGS, _pip_install
 
 log = logging.getLogger("autrau.whisper_cpp")
 
 _HF_API = "https://huggingface.co/api/models"
 _REPO = "ggerganov/whisper.cpp"
+
+# (name, speed 1..5, accuracy 1..5) — 5/1 = быстрее всего / менее точная
+_RATINGS = {
+    "tiny": (5, 1),
+    "base": (4, 2),
+    "small": (3, 3),
+    "medium": (2, 4),
+    "large-v3": (1, 5),
+}
+
 # (name, size_mb, description, ggml-file)
+#   Мультиязычные модели Whisper (99 языков, incl. ru) — как у faster-whisper.
 _MODELS = [
-    ("tiny", 75, "75 МБ · быстрая, низкая точность", "ggml-tiny.bin"),
-    ("base", 142, "142 МБ · базовая", "ggml-base.bin"),
-    ("small", 466, "466 МБ · баланс", "ggml-small.bin"),
-    ("medium", 1500, "1.5 ГБ · хорошее качество", "ggml-medium.bin"),
-    ("large-v3", 2900, "2.9 ГБ · самая точная", "ggml-large-v3.bin"),
+    ("tiny", 75, "Самая быстрая, низкая точность — для черновых проверок", "ggml-tiny.bin"),
+    ("base", 142, "Для коротких записей", "ggml-base.bin"),
+    ("small", 466, "Баланс скорости и качества", "ggml-small.bin"),
+    ("medium", 1500, "Высокая точность", "ggml-medium.bin"),
+    ("large-v3", 2900, "Самая точная (рекомендуется), но медленная", "ggml-large-v3.bin"),
 ]
 MODELS_DIR = Path(__file__).resolve().parent.parent / "data" / "models" / "whisper-cpp"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,12 +85,18 @@ class WhisperCppProvider(Provider):
         out = []
         for name, size_mb, desc, fname in _MODELS:
             local = self.model_local_path(name)
+            speed, accuracy = _RATINGS.get(name, (3, 3))
             out.append({
                 "name": name,
                 "display": f"{name} — {desc}",
                 "size_mb": size_mb,
                 "languages": None,   # all whisper.cpp models here are multilingual (incl. ru)
                 "russian": True,
+                "desc": desc,
+                "speed": speed,
+                "accuracy": accuracy,
+                "langs_full": _WHISPER_LANGS,
+                "lang_label": "99 языков",
                 "downloaded": local.exists(),
                 "local_path": str(local),
                 "source_url": f"https://huggingface.co/{_REPO}/resolve/main/{fname}",

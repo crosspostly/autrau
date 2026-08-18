@@ -92,12 +92,19 @@ class ParakeetOnnxProvider(Provider):
 
     def list_models(self) -> list[dict]:
         local = self._model_dir()
+        langs_full = [l for l in _MODEL_LANGS if l != "auto"]
         return [{
             "name": _MODEL_NAME,
             "display": "Parakeet TDT 0.6B v3 — 25 языков (вкл. русский), SOTA",
             "size_mb": 640,   # int8 download
             "languages": None,  # multilingual
             "russian": True,
+            "desc": ("SOTA 2025-2026, 25 языков (вкл. русский). "
+                     "Работает на любом GPU (DirectML) или CPU, без CUDA."),
+            "speed": 3,
+            "accuracy": 5,
+            "langs_full": langs_full,
+            "lang_label": "25 языков",
             "downloaded": self.is_model_downloaded(_MODEL_NAME),
             "local_path": str(local),
             "source_url": f"https://huggingface.co/{_HF_REPO}",

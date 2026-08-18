@@ -293,8 +293,11 @@
     }
     .model-row:hover { border-color: var(--border-bright); background: rgba(13, 17, 23, 0.6); }
     .model-row.active { border-color: var(--accent); background: rgba(255, 138, 101, 0.05); }
-    .mname { font-weight: 600; font-size: 13px; flex: 1; display: flex; align-items: center; gap: 8px; }
+    .mname { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .mname code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .minfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .mdesc { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+    .badge.met { letter-spacing: 0.5px; white-space: nowrap; }
     .badge { padding: 2px 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 20px; font-size: 10px; color: var(--text-muted); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
     .mstatus { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .mstatus.dl { background: rgba(110, 231, 183, 0.12); color: var(--accent-3); }
@@ -810,17 +813,26 @@
           : '<span class="ptag no">✗ не установлен</span>');
         const rows = models.map(m => {
           const active = state.activeProvider === p.name && state.activeModel === m.name;
-          const size = m.size_mb ? `<span class="badge">${fmtSize(m.size_mb)}</span>` : '';
-          const lang = m.russian === false
-            ? '<span class="badge en">EN</span>'
-            : '<span class="badge ru">RU</span>';
+          const size = m.size_mb ? `<span class="badge" title="Размер скачивания">${fmtSize(m.size_mb)}</span>` : '';
+          const langTitle = (m.langs_full || []).join(', ');
+          const lang = m.lang_label
+            ? `<span class="badge ${m.russian === false ? 'en' : 'ru'}" title="Поддерживает: ${langTitle}">${m.lang_label}</span>`
+            : (m.russian === false
+                ? '<span class="badge en" title="English only">EN</span>'
+                : '<span class="badge ru">RU</span>');
+          const met = [];
+          if (m.speed) met.push(`<span class="badge met" title="Скорость распознавания: ${m.speed}/5">⚡${'●'.repeat(m.speed)}${'○'.repeat(5 - m.speed)}</span>`);
+          if (m.accuracy) met.push(`<span class="badge met" title="Точность распознавания: ${m.accuracy}/5">${'★'.repeat(m.accuracy)}${'☆'.repeat(5 - m.accuracy)}</span>`);
           const action = !p.installed
             ? '<button class="tiny secondary" data-action="install">⬇ установить</button>'
             : `<button class="tiny secondary" data-action="download" title="${m.downloaded ? 'перескачать' : 'скачать'}">${m.downloaded ? '↻' : '⬇'}</button>`;
           return `
             <div class="model-row ${active ? 'active' : ''} ${!p.installed ? 'rowext' : ''}"
                  data-provider="${p.name}" data-name="${m.name}">
-              <div class="mname"><code>${m.name}</code>${lang}${size}</div>
+              <div class="minfo">
+                <div class="mname"><code>${m.name}</code>${lang}${met.join('')}${size}</div>
+                ${m.desc ? `<div class="mdesc">${m.desc}</div>` : ''}
+              </div>
               <span class="mstatus ${m.downloaded ? 'dl' : 'nodl'}">${m.downloaded ? '✓ готово' : 'не скачана'}</span>
               ${action}
             </div>`;
