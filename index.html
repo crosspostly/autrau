@@ -458,15 +458,21 @@
 
     /* Transcript list (favorites) */
     .t-row {
-      padding: 10px 0; border-bottom: 1px solid var(--border);
+      padding: 10px 8px; border-bottom: 1px solid var(--border); border-radius: 10px;
       display: flex; gap: 12px; align-items: center; font-size: 13px;
+      transition: background 0.15s;
     }
     .t-row:last-child { border-bottom: none; }
+    .t-row.selected { background: rgba(110, 231, 183, 0.07); }
     .t-row .tname { flex: 1; word-break: break-all; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
     .t-row .tname .tlink { color: var(--accent-2); text-decoration: none; border-bottom: 1px dashed rgba(110, 231, 183, 0.35); }
     .t-row .tname .tlink:hover { color: var(--accent-3); border-bottom-style: solid; }
     .t-row .tname .tlink:visited { color: var(--accent-2); }
     .t-row .tmeta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+    .t-check {
+      width: 16px; height: 16px; accent-color: var(--accent-3); cursor: pointer;
+      flex: none; margin: 0;
+    }
     .star-btn {
       background: none; border: 1px solid var(--border); border-radius: 8px;
       width: 34px; height: 34px; cursor: pointer; font-size: 16px; line-height: 1;
@@ -474,6 +480,26 @@
     }
     .star-btn:hover { border-color: var(--warn); color: var(--warn); }
     .star-btn.fav { color: var(--warn); border-color: var(--warn); background: rgba(250, 204, 21, 0.08); }
+    .t-del {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1;
+      color: var(--text-muted); flex: none; transition: all 0.15s;
+    }
+    .t-del:hover { border-color: var(--error); color: var(--error); background: rgba(248, 113, 113, 0.08); }
+
+    /* Bulk-selection bar (delete transcripts) */
+    .bulk-bar {
+      margin-top: 12px; padding: 10px 14px; border: 1px solid rgba(255, 138, 101, 0.35);
+      background: rgba(255, 138, 101, 0.07); border-radius: 12px;
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .bulk-bar .small { font-weight: 600; color: var(--accent); }
+    .danger {
+      background: rgba(248, 113, 113, 0.14); border: 1px solid rgba(248, 113, 113, 0.5);
+      color: var(--error); border-radius: 10px; padding: 9px 14px; font-size: 13px;
+      cursor: pointer; font-weight: 600; transition: all 0.15s;
+    }
+    .danger:hover { background: rgba(248, 113, 113, 0.25); }
 
     /* ============================================================
        Responsive
@@ -704,11 +730,19 @@
         избранном <b>никогда не удаляются</b> авто-очисткой, даже если подходят
         по условию «старше N дней». Снимите ★ — файл снова удаляется штатно.
       </div>
+      <div class="small" style="margin-bottom: 10px;" id="transcriptsDir"></div>
       <div id="transcriptsList">
         <div class="small">Загрузка…</div>
       </div>
+      <div id="bulkBar" class="bulk-bar hidden">
+        <span class="small" id="bulkCount">Выбрано: 0</span>
+        <span class="spacer"></span>
+        <button class="danger" id="bulkDelete">🗑 Удалить выбранные</button>
+        <button class="secondary" id="bulkClear">Снять выбор</button>
+      </div>
       <div class="actions" style="margin-top: 12px;">
         <button class="secondary" id="refreshTranscripts">🔄 Обновить список</button>
+        <button class="secondary" id="openFolder">🗂 Открыть папку с файлами</button>
         <span class="spacer"></span>
         <span class="small" id="transcriptsStatus"></span>
       </div>
@@ -1281,15 +1315,37 @@
              d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
     }
 
+    function plural(n, one, few, many) {
+      const m10 = n % 10, m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return one;
+      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+      return many;
+    }
+
+    const selectedSet = new Set();   // имена файлов, отмеченных галочкой
+
+    function updateBulkBar() {
+      const n = selectedSet.size;
+      $('bulkBar').classList.toggle('hidden', n === 0);
+      $('bulkCount').textContent = `Выбрано: ${n} ${plural(n, 'файл', 'файла', 'файлов')}`;
+      $('bulkDelete').textContent = `🗑 Удалить выбранные (${n})`;
+    }
+
     function renderTranscripts(items) {
       const wrap = $('transcriptsList');
+      // убираем отметки для файлов, которых уже нет
+      const alive = new Set(items.map(t => t.name));
+      for (const name of [...selectedSet]) if (!alive.has(name)) selectedSet.delete(name);
       if (!items.length) {
         wrap.innerHTML =
           '<div class="small">Пока нет расшифровок — после распознавания файл появится здесь.</div>';
+        updateBulkBar();
         return;
       }
       wrap.innerHTML = items.map(t => `
-        <div class="t-row">
+        <div class="t-row${selectedSet.has(t.name) ? ' selected' : ''}">
+          <input type="checkbox" class="t-check" data-name="${esc(t.name)}"
+                 title="Отметить файл (для удаления)" ${selectedSet.has(t.name) ? 'checked' : ''}>
           <button class="star-btn${t.is_favorite ? ' fav' : ''}" data-name="${esc(t.name)}"
                   title="${t.is_favorite ? 'Убрать из избранного — файл снова удаляется штатно' : 'Добавить в избранное — не будет удаляться авто-очисткой'}">
             ${t.is_favorite ? '★' : '☆'}
@@ -1297,7 +1353,38 @@
           <span class="tname"><a class="tlink" href="${API}/api/transcripts/${encodeURIComponent(t.name)}"
              target="_blank" rel="noopener" title="Открыть файл расшифровки">${esc(t.name)}</a></span>
           <span class="tmeta">${t.size_mb} МБ · ${fmtDate(t.modified)}</span>
+          <button class="t-del" data-name="${esc(t.name)}" title="Удалить этот файл">🗑</button>
         </div>`).join('');
+      updateBulkBar();
+    }
+
+    function confirmDeleteNames(names) {
+      const shown = names.slice(0, 5).map(n => '  • ' + n).join('\n');
+      const more = names.length > 5 ? `\n  … и ещё ${names.length - 5} ${plural(names.length - 5, 'файл', 'файла', 'файлов')}` : '';
+      return window.confirm(
+        `Удалить ${names.length} ${plural(names.length, 'файл', 'файла', 'файлов')} навсегда?\n\n` +
+        shown + more + '\n\nЭто действие нельзя отменить.'
+      );
+    }
+
+    async function deleteTranscripts(names) {
+      const st = $('transcriptsStatus');
+      st.textContent = 'удаляю …';
+      try {
+        const r = await fetch(API + '/api/transcripts', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ names }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        names.forEach(n => selectedSet.delete(n));
+        st.textContent = j.missing && j.missing.length
+          ? `🗑 удалено: ${j.deleted.length} · не найдено: ${j.missing.length}`
+          : `🗑 удалено: ${j.deleted.length}`;
+        await loadTranscripts();
+      } catch (err) {
+        st.textContent = '❌ ' + err.message;
+      }
     }
 
     async function loadTranscripts() {
@@ -1307,7 +1394,8 @@
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json();
         renderTranscripts(j.transcripts || []);
-        st.textContent = j.count ? `${j.count} файл(ов)` : '';
+        $('transcriptsDir').textContent = j.dir ? 'Папка с файлами: ' + j.dir : '';
+        st.textContent = j.count ? `${j.count} ${plural(j.count, 'файл', 'файла', 'файлов')}` : '';
       } catch (e) {
         $('transcriptsList').innerHTML =
           '<div class="small">⚠️ не удалось загрузить: ' + esc(e.message) + '</div>';
@@ -1316,6 +1404,14 @@
     }
 
     $('transcriptsList').addEventListener('click', async (e) => {
+      const delBtn = e.target.closest('.t-del');
+      if (delBtn) {
+        const name = delBtn.dataset.name;
+        if (window.confirm(`Удалить файл «${name}» навсегда?\n\nЭто действие нельзя отменить.`)) {
+          deleteTranscripts([name]);
+        }
+        return;
+      }
       const btn = e.target.closest('.star-btn');
       if (!btn) return;
       const st = $('transcriptsStatus');
@@ -1331,6 +1427,39 @@
           ? '★ в избранном — защищено от авто-очистки'
           : '☆ избранное снято — файл снова удаляется штатно';
         loadTranscripts();
+      } catch (err) {
+        st.textContent = '❌ ' + err.message;
+      }
+    });
+
+    $('transcriptsList').addEventListener('change', (e) => {
+      if (!e.target.classList.contains('t-check')) return;
+      const name = e.target.dataset.name;
+      if (e.target.checked) selectedSet.add(name); else selectedSet.delete(name);
+      const row = e.target.closest('.t-row');
+      if (row) row.classList.toggle('selected', e.target.checked);
+      updateBulkBar();
+    });
+
+    $('bulkDelete').addEventListener('click', () => {
+      const names = [...selectedSet];
+      if (names.length && confirmDeleteNames(names)) deleteTranscripts(names);
+    });
+
+    $('bulkClear').addEventListener('click', () => {
+      selectedSet.clear();
+      loadTranscripts();
+    });
+
+    $('openFolder').addEventListener('click', async () => {
+      const st = $('transcriptsStatus');
+      st.textContent = 'открываю папку …';
+      try {
+        const r = await fetch(API + '/api/transcripts/open-folder', { method: 'POST' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        st.textContent = '🗂 папка открыта в проводнике';
+        $('transcriptsDir').textContent = 'Папка с файлами: ' + j.dir;
       } catch (err) {
         st.textContent = '❌ ' + err.message;
       }

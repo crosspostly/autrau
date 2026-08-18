@@ -9,6 +9,8 @@ Endpoints:
   POST /api/cleanup               delete transcripts older than N days (0 = nothing)
   GET  /api/transcripts           list transcripts + favorite flags (prunes dead favorites)
   GET  /api/transcripts/{name}    download/open one transcript .txt file
+  DELETE /api/transcripts         delete selected transcripts (body: {"names": [...]})
+  POST /api/transcripts/open-folder  open the transcripts folder in the file manager
   POST /api/favorites             toggle/set favorite (favorites survive cleanup)
   GET  /api/updates               check app + model updates (?stream=1 — SSE progress)
   POST /api/updates/app           run self-update (git pull + pip upgrade)
@@ -25,6 +27,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 import tempfile
 from contextlib import asynccontextmanager
@@ -170,6 +173,17 @@ async def api_cleanup(payload: Optional[dict] = None) -> dict:
     return report
 
 
+def _open_in_file_manager(path: Path) -> None:
+    """Open a folder in the OS file manager (best-effort, non-blocking)."""
+    path = Path(path)
+    if sys.platform == "win32":
+        os.startfile(str(path))  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
+
+
 # ---- Transcripts & favorites ----
 @app.get("/api/transcripts")
 async def api_transcripts() -> dict:
@@ -184,7 +198,50 @@ async def api_transcripts() -> dict:
     favorites = fav.names()
     for it in items:
         it["is_favorite"] = it["name"] in favorites
-    return {"transcripts": items, "count": len(items)}
+    return {"transcripts": items, "count": len(items), "dir": str(clean.transcripts_dir())}
+
+
+@app.delete("/api/transcripts")
+async def api_transcripts_delete(payload: dict) -> dict:
+    """Delete selected transcript files.
+
+    Body: {"names": ["file1.txt", ...]}. Names are sanitized with `Path.name`
+    so path traversal is impossible. Deleted files are also removed from the
+    favorites list.
+    """
+    names = payload.get("names")
+    if not isinstance(names, list) or not names:
+        raise HTTPException(400, "names обязателен (массив имён файлов)")
+    deleted: list[str] = []
+    missing: list[str] = []
+    for raw in names:
+        if not isinstance(raw, str) or not raw:
+            continue
+        name = Path(raw).name
+        path = clean.transcripts_dir().joinpath(name)
+        if not path.is_file():
+            missing.append(name)
+            continue
+        try:
+            os.unlink(path)
+            deleted.append(name)
+        except OSError as e:
+            raise HTTPException(500, f"Не удалось удалить '{name}': {e}")
+    if deleted:
+        fav.prune({f.name for f in clean.list_files()})
+    return {"ok": True, "deleted": deleted, "missing": missing}
+
+
+@app.post("/api/transcripts/open-folder")
+async def api_transcripts_open_folder() -> dict:
+    """Open the transcripts folder in the system file manager (local app)."""
+    d = clean.transcripts_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    try:
+        _open_in_file_manager(d)
+    except Exception as e:
+        raise HTTPException(500, f"Не удалось открыть папку: {e}")
+    return {"ok": True, "dir": str(d)}
 
 
 @app.get("/api/transcripts/{name}")
