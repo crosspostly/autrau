@@ -617,7 +617,7 @@
           </button>
           <button class="preset-btn" data-preset="thorough" id="presetThorough">
             🎯 Тщательная
-            <span class="preset-speed">large · large-v3</span>
+            <span class="preset-speed">large-v3 · large-v3-turbo</span>
           </button>
         </div>
         <div class="mp-row">
@@ -868,7 +868,7 @@
       const PRESET_KEYS = {
         fast:     ['tiny', 'base'],
         balanced: ['small', 'medium'],
-        thorough: ['large-v3', 'large-v2', 'large', 'medium'],
+        thorough: ['large-v3', 'large-v3-turbo', 'large-v2', 'large', 'medium'],
       };
       const PRESET_ICONS = { fast: '⚡', balanced: '⚖', thorough: '🎯' };
       const PRESET_NAMES  = { fast: 'Быстрая', balanced: 'Сбалансированная', thorough: 'Тщательная' };
@@ -1082,7 +1082,7 @@
     $('onlyRu').addEventListener('change', renderModelSelect);
 
     // Пресеты — выбор модели в 1 клик
-    const PRESET_KEYS = { fast: ['tiny','base'], balanced: ['small','medium','medium-ct2'], thorough: ['large-v3','large-v2','large','medium','medium-ct2'] };
+    const PRESET_KEYS = { fast: ['tiny','base'], balanced: ['small','medium','medium-ct2'], thorough: ['large-v3','large-v3-turbo','large-v2','large','medium','medium-ct2'] };
     document.querySelectorAll('.preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const preset = btn.dataset.preset;

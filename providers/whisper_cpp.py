@@ -32,6 +32,7 @@ _RATINGS = {
     "base": (4, 2),
     "small": (3, 3),
     "medium": (2, 4),
+    "large-v3-turbo": (2, 4),
     "large-v3": (1, 5),
 }
 
@@ -42,6 +43,7 @@ _MODELS = [
     ("base", 142, "Для коротких записей", "ggml-base.bin"),
     ("small", 466, "Баланс скорости и качества", "ggml-small.bin"),
     ("medium", 1500, "Высокая точность", "ggml-medium.bin"),
+    ("large-v3-turbo", 1500, "Large-v3 обрезанный — почти та же точность, но вдвое быстрее", "ggml-large-v3-turbo.bin"),
     ("large-v3", 2900, "Самая точная (рекомендуется), но медленная", "ggml-large-v3.bin"),
 ]
 MODELS_DIR = Path(__file__).resolve().parent.parent / "data" / "models" / "whisper-cpp"
