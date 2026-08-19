@@ -70,25 +70,41 @@ class ArgosTranslateProvider(TranslationProvider):
         self._loaded_pair = None
 
     def is_available(self) -> tuple[bool, str]:
+        # Только лёгкая проверка пакета (не загружаем модели, иначе import зависает)
         try:
             import argostranslate  # noqa: F401
         except ImportError as e:
             return False, f"pip install argostranslate ({e})"
-        try:
-            from argostranslate import package, translate
-            # Check installed languages (cached)
-            if self._installed_langs is None:
-                self._installed_langs = translate.get_installed_languages()
-            codes = [l.code for l in self._installed_langs]
-            if self._from not in codes or self._to not in codes:
-                return False, (f"Языковая пара {self._from}↔{self._to} не установлена. "
-                               f"Выполните: argospm install translate-{self._from}_{self._to}")
-            return True, ""
-        except Exception as e:
-            return False, str(e)
+        # Не проверяем наличие модели здесь (это занимает время + грузит модели).
+        # Реальная проверка будет в translate() — если модели нет, упадём с понятной ошибкой.
+        return True, ""
 
     def _ensure_translator(self):
+        # Проверяем модели в отдельном потоке с таймаутом, чтобы не зависнуть
         from argostranslate import translate
+        import threading
+        if self._installed_langs is None:
+            result = [None, None]
+            def worker():
+                try:
+                    result[0] = translate.get_installed_languages()
+                except Exception as e:
+                    result[1] = e
+            t = threading.Thread(target=worker, daemon=True)
+            t.start()
+            t.join(10)  # 10 секунд максимум
+            if t.is_alive():
+                raise RuntimeError("argostranslate.get_installed_languages() завис (таймаут 10с). "
+                                   "Скорее всего повреждена установка. Переустановите: pip install --force-reinstall argostranslate")
+            if result[1]:
+                raise RuntimeError(f"argostranslate ошибка: {result[1]}")
+            self._installed_langs = result[0]
+        codes = [l.code for l in self._installed_langs]
+        if self._from not in codes or self._to not in codes:
+            raise RuntimeError(
+                f"Языковая пара {self._from}↔{self._to} не установлена. "
+                f"Выполните: py -3.13 -m argostranslate.package install translate-{self._from}_{self._to}"
+            )
         if self._loaded_pair == (self._from, self._to):
             return self._translation
         from_lang = next(l for l in self._installed_langs if l.code == self._from)

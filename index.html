@@ -842,12 +842,16 @@
           </div>
         </div>
       </div>
+    </div>
+    </div><!-- /settingsBody -->
 
-      <!-- Автоперевод на английский -->
-      <div class="row" style="margin-top: 18px;">
-        <div style="flex: 1 1 100%; max-width: 460px;">
+    <!-- Автоперевод на английский (отдельная карточка — всегда видна) -->
+    <div class="card">
+      <h2><span class="num">3.5</span> 🌐 Перевод на английский</h2>
+      <div class="row">
+        <div style="flex: 1 1 100%;">
           <label for="translateToEn">Автоперевод расшифровок на английский</label>
-          <div style="display:flex; gap:10px; align-items:center; margin-top:6px;">
+          <div style="display:flex; gap:10px; align-items:center; margin-top:6px; flex-wrap:wrap;">
             <input type="checkbox" id="translateToEn" style="width:18px; height:18px; cursor:pointer;">
             <select id="translateProvider" style="padding:6px 8px; font-size:13px;">
               <option value="libretranslate">LibreTranslate (public, бесплатно)</option>
@@ -855,17 +859,28 @@
               <option value="minimax">MiniMax (платно, качество)</option>
             </select>
             <button class="secondary" id="saveTranslate">💾 Сохранить</button>
+            <button class="secondary" id="testTranslate" title="Проверить, что выбранный провайдер реально работает">🧪 Тест</button>
           </div>
           <div class="small" style="margin-top:8px; opacity:.75;">
             Если включено — после каждой расшифровки создаётся <code>&lt;имя&gt;.en.txt</code> рядом.
-            Для <b>Argos</b> сначала: <code>pip install argostranslate</code> +
-            <code>argospm install translate-en_ru</code> (~280 МБ, локально, без облака).
+            Нажмите <b>🧪 Тест</b> чтобы проверить — если все провайдеры недоступны, перевод просто пропускается (оригинал остаётся).
           </div>
           <div class="small" id="translateStatus" style="margin-top:6px;"></div>
         </div>
       </div>
+      <details style="margin-top:12px;">
+        <summary class="small" style="cursor:pointer; user-select:none; color:var(--text-dim);">🔧 Установка Argos Translate (локальный движок, ~280 МБ)</summary>
+        <div class="small" style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.25); border-radius:8px; font-family:'JetBrains Mono',monospace; line-height:1.6;">
+          <b>Шаг 1.</b> Установить пакет:<br>
+          <code style="color:var(--accent-2);">py -3.13 -m pip install argostranslate</code><br><br>
+          <b>Шаг 2.</b> Скачать модель (один раз, ~280 МБ):<br>
+          <code style="color:var(--accent-2);">py -3.13 -m argostranslate.package install translate-ru_en</code><br>
+          <i>(займёт 1-2 минуты)</i><br><br>
+          <b>Шаг 3.</b> В UI: выбрать "Argos Translate" → 💾 Сохранить → 🧪 Тест.<br><br>
+          <i>Примечание: после установки нужно перезапустить сервер, чтобы Python увидел новый пакет.</i>
+        </div>
+      </details>
     </div>
-    </div><!-- /settingsBody -->
 
     <!-- Transcripts -->
     <div class="card">
@@ -2225,6 +2240,34 @@
     });
     // Check providers on init
     setTimeout(checkTranslateProviders, 500);
+
+    // Test translation with current config
+    $('testTranslate').addEventListener('click', async () => {
+      const st = $('translateStatus');
+      st.textContent = 'пробую перевести тестовую фразу…';
+      try {
+        // Make sure saved settings are current
+        cfg.translation_provider = $('translateProvider').value;
+        cfg.translate_to_en = $('translateToEn').checked;
+        const r = await fetch(API + '/api/translate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: 'Привет, мир! Это тест переводчика.',
+            target: 'en',
+            provider: cfg.translation_provider,
+            fallback: cfg.translation_fallback,
+            minimax_key: cfg.minimax_key,
+            libretranslate_url: cfg.libretranslate_url,
+            libretranslate_key: cfg.libretranslate_key,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
+        st.innerHTML = `✅ <b>${j.provider}</b>: "${j.translated}"`;
+      } catch (e) {
+        st.innerHTML = '❌ ' + e.message;
+      }
+    });
 
     // ===== Settings collapse (gear icon) =====
     const settingsHeader = $('settingsHeader');
