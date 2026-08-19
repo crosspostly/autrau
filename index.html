@@ -541,6 +541,31 @@
     }
     .t-del:hover { border-color: var(--error); color: var(--error); background: rgba(248, 113, 113, 0.08); }
 
+    /* Tabs: Files vs Voice memos */
+    .trans-tab {
+      padding: 6px 12px; font-size: 13px; cursor: pointer;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-dim); border-radius: 8px; transition: all 0.15s;
+    }
+    .trans-tab:hover { color: var(--text); border-color: var(--accent); }
+    .trans-tab.active {
+      background: rgba(110, 231, 183, 0.12);
+      color: var(--accent-2); border-color: var(--accent-2);
+    }
+    .trans-rec-btn {
+      margin-left: auto;
+      padding: 6px 12px; font-size: 13px; cursor: pointer;
+      background: rgba(248, 113, 113, 0.14); border: 1px solid rgba(248, 113, 113, 0.5);
+      color: var(--error); border-radius: 8px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .trans-rec-btn:hover { background: rgba(248, 113, 113, 0.22); }
+    .trans-rec-btn.recording { animation: rec-pulse 1.5s ease-in-out infinite; }
+    @keyframes rec-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(248, 113, 113, 0); }
+    }
+
     /* Bulk-selection bar (delete transcripts) */
     .bulk-bar {
       margin-top: 12px; padding: 10px 14px; border: 1px solid rgba(255, 138, 101, 0.35);
@@ -599,7 +624,7 @@
     <!-- Hero -->
     <section class="hero">
       <h1>Превращаем аудио в текст<br>прямо на вашем ПК</h1>
-      <p>Без облака, без интернета, без лимитов. Несколько провайдеров на выбор — <span class="accent">Faster-Whisper</span>, <span class="accent">Whisper.cpp</span> или <span class="accent">Parakeet v3</span> (SOTA 2025). Полный контроль и обновления из GitHub.</p>
+      <p>Без облака, без интернета, без лимитов. Два движка на выбор — <span class="accent">Whisper.cpp</span> (tiny / large-v3) или <span class="accent">Parakeet v3</span> ONNX/DirectML (SOTA 2025–2026, 25 языков). Запись голосом по горячей клавише, очередь файлов, избранное. Полный контроль и обновления из GitHub.</p>
     </section>
 
     <!-- Provider & model selection -->
@@ -800,6 +825,10 @@
         по условию «старше N дней». Снимите ★ — файл снова удаляется штатно.
       </div>
       <div class="small" style="margin-bottom: 10px;" id="transcriptsDir"></div>
+      <div class="trans-tabs" style="display:flex; gap:6px; margin-bottom:10px;">
+        <button class="secondary trans-tab active" data-tab="files" id="tabFiles">📁 Файлы</button>
+        <button class="secondary trans-tab" data-tab="voice" id="tabVoice">🎙 Голосовые заметки</button>
+      </div>
       <div id="transcriptsSelectAll" style="margin-bottom: 8px;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-dim);">
           <input type="checkbox" id="transSelectAll" title="Выбрать все файлы">
@@ -1628,17 +1657,17 @@
       $cb.indeterminate = n > 0 && n < total;
     }
 
-    function renderTranscripts(items) {
+    function renderTranscripts(items, emptyMsg) {
       transItems = items;
       const wrap = $('transcriptsList');
       const selAll = $('transcriptsSelectAll');
+      const _emptyMsg = emptyMsg || 'Пока нет расшифровок — после распознавания файл появится здесь.';
       // убираем отметки для файлов, которых уже нет
       const alive = new Set(items.map(t => t.name));
       for (const name of [...selectedSet]) if (!alive.has(name)) selectedSet.delete(name);
       if (!items.length) {
         selAll.classList.add('hidden');
-        wrap.innerHTML =
-          '<div class="small">Пока нет расшифровок — после распознавания файл появится здесь.</div>';
+        wrap.innerHTML = '<div class="small">' + esc(_emptyMsg) + '</div>';
         updateBulkBar();
         return;
       }
@@ -1664,8 +1693,11 @@
     function confirmDeleteNames(names) {
       const shown = names.slice(0, 5).map(n => '  • ' + n).join('\n');
       const more = names.length > 5 ? `\n  … и ещё ${names.length - 5} ${plural(names.length - 5, 'файл', 'файла', 'файлов')}` : '';
+      const kind = state.activeTab === 'voice' ? 'голосов' : 'файл';
+      const kindFew = state.activeTab === 'voice' ? 'голоса' : 'файла';
+      const kindMany = state.activeTab === 'voice' ? 'голосов' : 'файлов';
       return window.confirm(
-        `Удалить ${names.length} ${plural(names.length, 'файл', 'файла', 'файлов')} навсегда?\n\n` +
+        `Удалить ${names.length} ${plural(names.length, kind, kindFew, kindMany)} навсегда?\n\n` +
         shown + more + '\n\nЭто действие нельзя отменить.'
       );
     }
@@ -1673,8 +1705,9 @@
     async function deleteTranscripts(names) {
       const st = $('transcriptsStatus');
       st.textContent = 'удаляю …';
+      const endpoint = state.activeTab === 'voice' ? '/api/voice-memos' : '/api/transcripts';
       try {
-        const r = await fetch(API + '/api/transcripts', {
+        const r = await fetch(API + endpoint, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ names }),
         });
@@ -1690,17 +1723,30 @@
       }
     }
 
+    // v1.5: tab state for transcripts vs voice memos
+    state.activeTab = state.activeTab || 'files';
+
     async function loadTranscripts() {
       const st = $('transcriptsStatus');
       $('transSelectAll').checked = false;
       $('transSelectAll').indeterminate = false;
+      const isVoice = state.activeTab === 'voice';
+      const endpoint = isVoice ? '/api/voice-memos' : '/api/transcripts';
+      const itemsKey = isVoice ? 'voice_memos' : 'transcripts';
+      const emptyMsg = isVoice
+        ? 'Пока нет голосовых заметок. Нажмите 🔴 Записать (Ctrl+Shift+R), чтобы сделать первую.'
+        : 'Пока нет расшифровок — после распознавания файл появится здесь.';
+      const dirLabel = isVoice ? 'Папка голосовых: ' : 'Папка с файлами: ';
       try {
-        const r = await fetch(API + '/api/transcripts');
+        const r = await fetch(API + endpoint);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json();
-        renderTranscripts(j.transcripts || []);
-        $('transcriptsDir').textContent = j.dir ? 'Папка с файлами: ' + j.dir : '';
-        st.textContent = j.count ? `${j.count} ${plural(j.count, 'файл', 'файла', 'файлов')}` : '';
+        renderTranscripts(j[itemsKey] || [], emptyMsg);
+        $('transcriptsDir').textContent = j.dir ? dirLabel + j.dir : '';
+        const noun = isVoice ? 'голосовая' : 'файл';
+        const nounFew = isVoice ? 'голосовые' : 'файла';
+        const nounMany = isVoice ? 'голосовых' : 'файлов';
+        st.textContent = j.count ? `${j.count} ${plural(j.count, noun, nounFew, nounMany)}` : '';
       } catch (e) {
         $('transcriptsList').innerHTML =
           '<div class="small">⚠️ не удалось загрузить: ' + esc(e.message) + '</div>';
@@ -1789,8 +1835,9 @@
     $('openFolder').addEventListener('click', async () => {
       const st = $('transcriptsStatus');
       st.textContent = 'открываю папку …';
+      const endpoint = state.activeTab === 'voice' ? '/api/voice-memos/open-folder' : '/api/transcripts/open-folder';
       try {
-        const r = await fetch(API + '/api/transcripts/open-folder', { method: 'POST' });
+        const r = await fetch(API + endpoint, { method: 'POST' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json();
         st.textContent = '🗂 папка открыта в проводнике';
@@ -1803,6 +1850,19 @@
     $('refreshTranscripts').addEventListener('click', () => {
       $('transcriptsStatus').textContent = 'обновляю …';
       loadTranscripts();
+    });
+
+    // v1.5: Tab switching
+    function switchTab(tab) {
+      state.activeTab = tab;
+      document.querySelectorAll('.trans-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+      selectedSet.clear();
+      loadTranscripts();
+    }
+    document.querySelectorAll('.trans-tab').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
     // ===== UPDATES =====
