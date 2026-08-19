@@ -434,10 +434,11 @@ async def api_voice_memos_open_folder() -> dict:
 
 
 # ---- Translation (v1.5) ----
-async def _maybe_translate(text: str, info: dict, target_path=None) -> Optional[Path]:
+def _maybe_translate(text: str, info: dict, target_path=None) -> Optional[Path]:
     """Если cfg.translate_to_en и язык != en — переводит и сохраняет *.en.txt.
     Возвращает путь к переведённому файлу, или None.
     Логирует ошибки, но НЕ падает (оригинал уже сохранён).
+    Sync — вызывается из producer() (обычная функция в thread executor).
     """
     if not text or not text.strip():
         return None
@@ -603,7 +604,7 @@ async def api_voice_stop(payload: dict) -> dict:
         info.setdefault("model", m_name)
         path = clean.save_voice_memo(text, info)
         if path:
-            await _maybe_translate(text, info, target_path=path)
+            _maybe_translate(text, info, target_path=path)
         log.info("Voice memo saved: %s (chunks=%d)", path.name, len(chunks))
         return {
             "id": sid,
@@ -913,7 +914,7 @@ async def transcribe(
                 _info.setdefault("model", m_name)
                 _path = clean.save_transcript(file.filename, out.get("text", ""), _info)
                 if _path:
-                    await _maybe_translate(out.get("text", ""), _info, target_path=_path)
+                    _maybe_translate(out.get("text", ""), _info, target_path=_path)
             except Exception as se:
                 log.warning("Не удалось сохранить расшифровку: %s", se)
             _enqueue("done", 100, out)

@@ -37,6 +37,20 @@ def _http_post_json(url: str, body: dict, headers: Optional[dict] = None,
         raise RuntimeError(f"HTTP {e.code}: {body[:300]}")
 
 
+# ----- Abstract -----
+
+class TranslationProvider(ABC):
+    name: str = "?"
+
+    @abstractmethod
+    def is_available(self) -> tuple[bool, str]:
+        """(True, "") если может работать; иначе (False, "почему")."""
+
+    @abstractmethod
+    def translate(self, text: str, source: str = "auto", target: str = "en") -> str:
+        """Переводит text → язык target. source="auto" для авто-определения."""
+
+
 # ----- Argos Translate (local, lightweight, no GPU needed) -----
 
 class ArgosTranslateProvider(TranslationProvider):
@@ -112,7 +126,6 @@ class ArgosTranslateProvider(TranslationProvider):
         return self._translation.translate(text)
 
 
-# ----- Abstract -----
 
 class TranslationProvider(ABC):
     name: str = "?"
