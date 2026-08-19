@@ -814,6 +814,24 @@
         <span class="spacer"></span>
         <span class="small" id="cleanupStatus"></span>
       </div>
+
+      <!-- Горячая клавиша для голосовых заметок -->
+      <div class="row" style="margin-top: 18px;">
+        <div style="flex: 1 1 100%; max-width: 460px;">
+          <label for="hotkeyInput">Горячая клавиша для записи</label>
+          <div style="display:flex; gap:10px; align-items:center; margin-top:6px;">
+            <input type="text" id="hotkeyInput" readonly
+                   style="width:200px; cursor:pointer; background:rgba(255,255,255,0.04);"
+                   placeholder="Нажмите для записи сочетания…"
+                   title="Кликните и нажмите нужное сочетание клавиш">
+            <button class="secondary" id="hotkeyReset" title="Вернуть Ctrl+Shift+R">↺ Сброс</button>
+          </div>
+          <div class="small" style="margin-top:8px; opacity:.75;">
+            Нажмите это сочетание в любой момент, чтобы начать/остановить запись голоса.
+            Работает, когда вкладка с Autrau в фокусе. Для системного хоткея нужен desktop exe (v1.6).
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Transcripts -->
@@ -825,9 +843,11 @@
         по условию «старше N дней». Снимите ★ — файл снова удаляется штатно.
       </div>
       <div class="small" style="margin-bottom: 10px;" id="transcriptsDir"></div>
-      <div class="trans-tabs" style="display:flex; gap:6px; margin-bottom:10px;">
+      <div class="trans-tabs" style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">
         <button class="secondary trans-tab active" data-tab="files" id="tabFiles">📁 Файлы</button>
         <button class="secondary trans-tab" data-tab="voice" id="tabVoice">🎙 Голосовые заметки</button>
+        <span style="flex:1"></span>
+        <button class="trans-rec-btn" id="recordBtn" title="Нажмите для записи (Ctrl+Shift+R)">🔴 Записать</button>
       </div>
       <div id="transcriptsSelectAll" style="margin-bottom: 8px;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-dim);">
@@ -850,6 +870,25 @@
         <span class="spacer"></span>
         <span class="small" id="transcriptsStatus"></span>
       </div>
+    </div>
+  </div>
+
+  <!-- Voice recording overlay (hidden by default) -->
+  <div id="recOverlay" class="hidden" style="position:fixed; bottom:24px; right:24px; z-index:9999;
+       background:rgba(20,20,28,0.96); border:1px solid rgba(248,113,113,0.5);
+       border-radius:14px; padding:14px 18px; min-width:280px; max-width:420px;
+       box-shadow:0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(8px);">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <span id="recDot" style="display:inline-block; width:10px; height:10px; border-radius:50%;
+            background:var(--error); animation:rec-pulse 1.5s ease-in-out infinite;"></span>
+      <strong id="recStatus">Recording…</strong>
+      <span class="spacer" style="flex:1"></span>
+      <span id="recTimer" style="font-family:'JetBrains Mono',monospace; color:var(--accent-2);">00:00</span>
+    </div>
+    <div id="recText" class="small" style="color:var(--text-dim); max-height:80px; overflow:hidden;">Говорите…</div>
+    <div style="display:flex; gap:6px; margin-top:10px;">
+      <button class="danger" id="recStop" style="flex:1;">⏹ Стоп</button>
+      <button class="secondary" id="recCancel" title="Отменить без сохранения">✕</button>
     </div>
   </div>
 
@@ -886,6 +925,8 @@
         const prov = await provResp.json();
         const cfg = await cfgResp.json();
         const h = await healthResp.json();
+        // Expose to global for hotkey/recorder (v1.5)
+        window.cfg = cfg;
 
         state.providers = prov.providers;
         state.activeProvider = prov.active.provider;
@@ -894,6 +935,7 @@
         $('lang').value = cfg.language;
         const cd = parseInt(cfg.cleanup_after_days, 10);
         $('cleanupDays').value = Number.isFinite(cd) && cd >= 0 ? cd : 0;
+        if (cfg.hotkey) $('hotkeyInput').value = cfg.hotkey;
 
         renderModelSelect();
         updatePresetLabels();
@@ -1864,6 +1906,240 @@
     document.querySelectorAll('.trans-tab').forEach(btn => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
+
+    // ===== VOICE RECORDING (v1.5) =====
+    const voice = {
+      sessionId: null,
+      recorder: null,
+      stream: null,
+      startedAt: 0,
+      timerId: null,
+      capturing: false,   // user is editing hotkey
+      active: false,      // currently recording
+      pendingStop: false, // user pressed stop, waiting for final chunk
+    };
+
+    function fmtTime(sec) {
+      const m = Math.floor(sec / 60), s = sec % 60;
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function showOverlay(status, text) {
+      $('recOverlay').classList.remove('hidden');
+      $('recStatus').textContent = status;
+      $('recText').textContent = text;
+    }
+    function hideOverlay() {
+      $('recOverlay').classList.add('hidden');
+    }
+
+    function updateRecBtn() {
+      const b = $('recordBtn');
+      if (voice.active) {
+        b.classList.add('recording');
+        b.innerHTML = '⏹ Остановить';
+      } else {
+        b.classList.remove('recording');
+        b.innerHTML = '🔴 Записать';
+      }
+    }
+
+    function startTimer() {
+      voice.startedAt = Date.now();
+      voice.timerId = setInterval(() => {
+        const sec = Math.floor((Date.now() - voice.startedAt) / 1000);
+        $('recTimer').textContent = fmtTime(sec);
+      }, 250);
+    }
+    function stopTimer() { clearInterval(voice.timerId); voice.timerId = null; }
+
+    async function startRecording() {
+      if (voice.active) return;
+      try {
+        // 1) ask server for a session id
+        const r = await fetch(API + '/api/voice/start', { method: 'POST' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        voice.sessionId = j.id;
+        // 2) get mic + MediaRecorder
+        voice.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const opts = { mimeType: 'audio/webm;codecs=opus' };
+        voice.recorder = MediaRecorder.isTypeSupported(opts.mimeType)
+          ? new MediaRecorder(voice.stream, opts)
+          : new MediaRecorder(voice.stream);
+        voice.recorder.ondataavailable = async (e) => {
+          if (e.data && e.data.size > 0 && voice.sessionId) {
+            const fd = new FormData();
+            fd.append('id', voice.sessionId);
+            fd.append('chunk', e.data, 'chunk.webm');
+            try { await fetch(API + '/api/voice/chunk', { method: 'POST', body: fd }); }
+            catch (err) { console.warn('chunk upload failed:', err); }
+          }
+        };
+        voice.recorder.start(500); // emit a chunk every 500ms
+        voice.active = true;
+        showOverlay('Recording…', 'Говорите. ' + (cfg.hotkey || 'Ctrl+Shift+R') + ' — стоп.');
+        startTimer();
+        updateRecBtn();
+      } catch (err) {
+        voice.active = false;
+        hideOverlay();
+        stopTimer();
+        updateRecBtn();
+        if (voice.stream) { voice.stream.getTracks().forEach(t => t.stop()); voice.stream = null; }
+        alert('Не удалось начать запись: ' + err.message + '\n\n' +
+              'Проверьте:\n' +
+              '• Разрешение на микрофон в адресной строке (🔒 → Микрофон → Разрешить)\n' +
+              '• Микрофон не занят другим приложением\n' +
+              '• Браузер поддерживает MediaRecorder (Chrome/Firefox/Edge/Safari 14.1+)');
+      }
+    }
+
+    async function stopRecording({ cancel = false } = {}) {
+      if (!voice.active) return;
+      voice.active = false;
+      stopTimer();
+      updateRecBtn();
+      // Stop recorder + mic tracks
+      if (voice.recorder && voice.recorder.state !== 'inactive') {
+        try { voice.recorder.stop(); } catch (e) {}
+      }
+      if (voice.stream) { voice.stream.getTracks().forEach(t => t.stop()); voice.stream = null; }
+      const sid = voice.sessionId;
+      voice.sessionId = null;
+      if (cancel) {
+        hideOverlay();
+        // Best-effort: tell server to drop the session (won't transcribe)
+        if (sid) fetch(API + '/api/voice/stop', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: sid, _cancel: true }),
+        }).catch(() => {});
+        return;
+      }
+      showOverlay('Транскрибирую…', 'Секунду.');
+      try {
+        const lang = $('lang') ? $('lang').value : (cfg.language || 'ru');
+        const r = await fetch(API + '/api/voice/stop', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: sid, language: lang }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
+        showOverlay('Готово ✓', (j.text || '').slice(0, 240) + ((j.text || '').length > 240 ? '…' : ''));
+        // Switch to voice tab and refresh
+        if (state.activeTab !== 'voice') switchTab('voice');
+        else loadTranscripts();
+        // Auto-hide after 6s
+        setTimeout(hideOverlay, 6000);
+      } catch (err) {
+        showOverlay('Ошибка', err.message);
+        setTimeout(hideOverlay, 8000);
+      }
+    }
+
+    $('recordBtn').addEventListener('click', () => {
+      if (voice.active) stopRecording();
+      else startRecording();
+    });
+    $('recStop').addEventListener('click', () => stopRecording());
+    $('recCancel').addEventListener('click', () => stopRecording({ cancel: true }));
+
+    // Graceful: closing tab while recording → server should finalize
+    window.addEventListener('beforeunload', () => {
+      if (voice.active && voice.sessionId) {
+        navigator.sendBeacon(API + '/api/voice/stop',
+          new Blob([JSON.stringify({ id: voice.sessionId, language: cfg.language || 'ru' })],
+            { type: 'application/json' }));
+      }
+    });
+
+    // ----- Hotkey -----
+    function parseHotkey(e) {
+      const parts = [];
+      if (e.ctrlKey) parts.push('Ctrl');
+      if (e.shiftKey) parts.push('Shift');
+      if (e.altKey) parts.push('Alt');
+      if (e.metaKey) parts.push('Meta');
+      let k = e.key;
+      if (k === ' ') k = 'Space';
+      else if (k.length === 1) k = k.toUpperCase();
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(k)) return null; // modifier only
+      parts.push(k);
+      return parts.join('+');
+    }
+    function matchesHotkey(e) {
+      const hk = cfg.hotkey || 'Ctrl+Shift+R';
+      const want = hk.split('+');
+      const have = [];
+      if (e.ctrlKey) have.push('Ctrl');
+      if (e.shiftKey) have.push('Shift');
+      if (e.altKey) have.push('Alt');
+      if (e.metaKey) have.push('Meta');
+      let k = e.key;
+      if (k === ' ') k = 'Space';
+      else if (k.length === 1) k = k.toUpperCase();
+      have.push(k);
+      return want.length === have.length && want.every((p, i) => p === have[i]);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (voice.capturing) return; // captured below
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+        // Don't hijack typing — except the hotkey-config input itself is already handled via voice.capturing
+        return;
+      }
+      if (matchesHotkey(e)) {
+        e.preventDefault();
+        if (voice.active) stopRecording();
+        else startRecording();
+      }
+    });
+
+    // Hotkey config UI
+    function bindHotkey() {
+      const inp = $('hotkeyInput');
+      if (cfg.hotkey) inp.value = cfg.hotkey;
+    }
+    const hotkeyInput = $('hotkeyInput');
+    hotkeyInput.addEventListener('focus', () => {
+      voice.capturing = true;
+      hotkeyInput.value = 'Нажмите сочетание…';
+      hotkeyInput.style.borderColor = 'var(--accent)';
+    });
+    hotkeyInput.addEventListener('blur', () => {
+      voice.capturing = false;
+      hotkeyInput.value = cfg.hotkey || 'Ctrl+Shift+R';
+      hotkeyInput.style.borderColor = '';
+    });
+    hotkeyInput.addEventListener('keydown', async (e) => {
+      if (!voice.capturing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const hk = parseHotkey(e);
+      if (!hk) return;
+      voice.capturing = false;
+      cfg.hotkey = hk;
+      hotkeyInput.value = hk;
+      hotkeyInput.style.borderColor = '';
+      hotkeyInput.blur();
+      try {
+        await fetch(API + '/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotkey: hk }),
+        });
+      } catch (err) { console.warn('hotkey save failed:', err); }
+    });
+    $('hotkeyReset').addEventListener('click', async () => {
+      cfg.hotkey = 'Ctrl+Shift+R';
+      $('hotkeyInput').value = 'Ctrl+Shift+R';
+      try {
+        await fetch(API + '/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotkey: 'Ctrl+Shift+R' }),
+        });
+      } catch (e) {}
+    });
+    // bindHotkey() called from init() after cfg is loaded
 
     // ===== UPDATES =====
     $('checkUpdates').addEventListener('click', checkUpdates);
