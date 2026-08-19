@@ -29,8 +29,9 @@
 | `POST` | `/api/voice/start` | Начать сессию записи (возвращает `id`) |
 | `POST` | `/api/voice/chunk` | Добавить аудио-чанк (multipart, `id` + `chunk`) |
 | `POST` | `/api/voice/stop` | Финализировать сессию: склейка → транскрипция → сохранение в voice-memos |
-| `POST` | `/api/translate` | Перевести текст (body: `{text, target?, source?, provider?, fallback?}`) |
+| `POST` | `/api/translate` | Перевести текст (body: `{text, target?, provider?, fallback?}`) |
 | `GET` | `/api/translate/providers` | Какие провайдеры перевода доступны прямо сейчас |
+| `POST` | `/api/translate/install-argos` | Установить `argostranslate`+`langdetect`+обе модели en_ru/ru_en в фоне |
 | `GET` | `/api/updates` | Проверка обновлений (JSON; `?stream=1` — SSE-прогресс) |
 | `POST` | `/api/updates/app` | Self-update: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` |
 | `POST` | `/api/model/download` | Скачать модель (SSE-прогресс) |
@@ -101,11 +102,18 @@
 
 `POST /api/voice/stop` — body: `{"id": "...", "language": "ru"}` (опционально). Склеивает все чанки сессии → конвертирует через ffmpeg (если нужно) → транскрибирует активным провайдером → сохраняет в `data/voice-memos/<timestamp>.txt`. Если включён `translate_to_en` — создаёт `<timestamp>.en.txt`. Ответ: `{"id", "text", "file", "dir"}`. Параметр `_cancel: true` — сессия дропается без транскрипции (используется при отмене записи).
 
-### Translation (v1.5)
+### Translation (v1.5 / v1.5.1)
 
-`POST /api/translate` — body: `{"text": "...", "target": "en", "source": "auto", "provider": "minimax" | "libretranslate" | "argos", "fallback": "..."}`. Поля `provider`/`fallback`/`libretranslate_url`/`libretranslate_key`/`minimax_key` опциональны — берутся из `data/config.json` если не указаны. Ответ: `{"translated": "...", "provider": "minimax", "target": "en"}`. `502` если все провайдеры недоступны.
+`POST /api/translate` — body: `{"text": "...", "target": "en", "provider": "argos" | "libretranslate" | "minimax", "fallback": "..."}`. Поля `provider`/`fallback`/`libretranslate_url`/`libretranslate_key`/`minimax_key` опциональны — берутся из `data/config.json` если не указаны. Источник языка определяется автоматически (`langdetect` + Cyrillic-эвристика для Argos; `source=auto` для LibreTranslate). Ответ: `{"translated": "...", "provider": "argos", "target": "en"}`. `502` если все провайдеры недоступны.
 
-`GET /api/translate/providers` — статус каждого провайдера: `{"providers": [{"name", "available", "reason"}, ...], "translate_to_en": bool}`. Удобно для UI: показывает какие провайдеры реально работают.
+`GET /api/translate/providers` — статус каждого провайдера: `{"providers": [{"name", "available", "reason"}, ...], "translate_to_en": bool}`. Удобно для UI: показывает какие провайдеры реально работают, обновляет badge'ы в hero. Вызов с таймаутом 5с на провайдер (is_available может зависнуть).
+
+`POST /api/translate/install-argos` — устанавливает локальный движок Argos:
+- pip install `argostranslate` + `langdetect` (если не установлены)
+- Обновляет индекс пакетов с GitHub (`raw.githubusercontent.com/argosopentech/argospm-index/main/`)
+- Скачивает обе модели в фоне: `translate-en_ru` (187 МБ) + `translate-ru_en` (149 МБ) → `~/local/share/argos-translate/packages/`
+- Ответ сразу: `{"ok": true, "started": true, "installing": ["translate-en_ru", "translate-ru_en"], "note": "..."}`. Установка идёт в фоне; опрашивать `/api/translate/providers` пока `argos.available=true`.
+- Если модели уже стоят — `{"ok": true, "already_installed": true}`.
 
 `POST /api/provider/install` — тело `{"provider": "whisper-cpp"}`; ответ `{"ok": true, "log": [...]}` (последние ~50 строк вывода pip).
 

@@ -59,7 +59,29 @@ curl -X POST http://127.0.0.1:8000/transcribe -F "file=@a.mp3" -F "provider=para
 
 5. Авто-очистка (см. [CONFIGURATION.md](CONFIGURATION.md)): после транскрибации проверьте `data/transcripts/`, затем `curl -X POST http://127.0.0.1:8000/api/cleanup -H "Content-Type: application/json" -d '{"days":0}'` — при `days=0` ничего не удаляется.
 
-6. Избранное (защита от авто-очистки):
+6. Translation (v1.5+):
+
+```bash
+# Статус провайдеров
+curl http://127.0.0.1:8000/api/translate/providers
+# → {"providers": [{"name": "argos", "available": true, "reason": "en_ru+ru_en модели установлены"}, ...]}
+
+# Тест перевода (Argos)
+curl -X POST http://127.0.0.1:8000/api/translate \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Привет, как дела?", "target": "en", "provider": "argos"}'
+# → {"translated": "Hey, how are you?", "provider": "argos", "target": "en"}
+
+# Полный пайплайн: включить + транскрибировать + проверить .en.txt
+curl -X POST http://127.0.0.1:8000/api/config \
+  -H "Content-Type: application/json" \
+  -d '{"translate_to_en": true, "translation_provider": "argos"}'
+curl -N -F "file=@sample.mp3" -F "language=ru" http://127.0.0.1:8000/transcribe
+ls data/transcripts/*.en.txt   # должен появиться файл
+curl http://127.0.0.1:8000/api/transcripts  # has_translation=true, translation_name=*.en.txt
+```
+
+7. Избранное (защита от авто-очистки):
 
 ```bash
 # список расшифровок (должен появиться файл после шага 3)

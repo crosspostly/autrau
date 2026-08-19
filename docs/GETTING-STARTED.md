@@ -64,3 +64,23 @@ python server.py
 - [DEVELOPMENT.md](DEVELOPMENT.md) — как устроена разработка и как добавить свой провайдер
 - [TESTING.md](TESTING.md) — как проверять изменения
 - [ARCHITECTURE.md](ARCHITECTURE.md) — общая схема системы
+
+## Автоперевод на английский (опционально, v1.5+)
+
+По умолчанию перевод **выключен** (`translate_to_en: false`). Чтобы включить — откройте шестерёнку → «3.5 🌐 Перевод на английский» → поставьте галочку + выберите провайдера + 💾 Сохранить.
+
+**Рекомендуемый провайдер: Argos Translate (локально, ~336 МБ en↔ru, без облака).**
+
+Установка одной кнопкой в UI: «📥 Установить Argos» в той же секции. Установка идёт в фоне (pip + скачивание моделей с `argos-net.com`); после — `argos.available=true` в `/api/translate/providers`, badge `✓ Argos` в hero.
+
+Установка вручную (если UI-кнопка не работает):
+
+```bash
+# В venv сервера:
+.\.venv\Scripts\python.exe -m pip install argostranslate langdetect
+# Скачать обе модели en↔ru (~336 МБ, общая папка ~/local/share/argos-translate/packages/):
+.\.venv\Scripts\python.exe -c "from argostranslate import package; package.update_package_index(); [p.install() for p in package.get_available_packages() if p.code in ('translate-en_ru', 'translate-ru_en')]"
+# Перезапустить сервер (чтобы Python увидел новый пакет)
+```
+
+⚠️ Публичные LibreTranslate инстансы (`libretranslate.com` и др.) мертвы в 2025 (502/403/404). Используйте Argos (локально) или MiniMax (платный API, ключ в `~/.minimax/auth.json`).

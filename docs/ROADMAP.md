@@ -35,6 +35,36 @@
 - **Статус:** ✅ сделано 2026-08-19
 - `voice-123.mp3` → транскрипт `2026-08-19_voice-123.mp3.txt` (раньше был без `.mp3`).
 
+## ✅ Сделано в v1.5.1 (Argos Translate — локально)
+
+### 🌐 Argos Translate — работает из коробки
+- **Статус:** ✅ сделано 2026-08-19
+- **Argos Translate** установлен локально (`pip install argostranslate langdetect` +
+  модели `translate-en_ru` (187 МБ) + `translate-ru_en` (149 МБ) в
+  `~/local/share/argos-translate/packages/`, 336 МБ суммарно).
+- Реальный URL моделей: `argos-net.com` (⚠️ НЕ `argosopentech.com` — мёртв с 2024).
+  Индекс: `raw.githubusercontent.com/argosopentech/argospm-index/main/`.
+- Теперь translation **работает без ключей и без интернета** — `argos` стал preferred
+  провайдером (default), `libretranslate` — fallback (его публичные инстансы мёртвы).
+- `POST /api/translate/install-argos` — устанавливает пакет + обе модели в фоне.
+  В UI: кнопка «📥 Установить Argos» в шестерёнке → «3.5 🌐 Перевод».
+- `_translation_startup_check()` логирует ✓/✗ для каждого провайдера при старте.
+  В hero появились badges `✓ Argos` / `✓ LibreTranslate` / `🔁 Автоперевод: ВКЛ/выкл`.
+
+### ⚙️ Перевод перенесён ВНУТРЬ шестерёнки
+- **Статус:** ✅ сделано 2026-08-19
+- Раньше секция «3.5 🌐 Перевод» была отдельной карточкой; теперь это последний
+  пункт внутри карточки «3 Настройки». Логика: все настройки — в шестерёнке.
+
+### 🐛 Критические багфиксы
+- `tr.translate()` вызывался с параметром `source=...`, которого нет в сигнатуре
+  → `502 Ошибка перевода: translate() got an unexpected keyword argument 'source'`.
+  Убрано.
+- `langdetect` не был в venv → Argos использовал `en→ru` для русского текста → мусор.
+  Поставлен + добавлена Cyrillic-эвристика как fallback если `langdetect` отсутствует.
+- `ArgosTranslateProvider.is_available()` теперь проверяет наличие обеих моделей
+  (раньше только `import argostranslate`) — корректный reason в `/api/translate/providers`.
+
 ## Ближайшие (high priority)
 
 ### 📱 Telegram-бот

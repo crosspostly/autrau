@@ -36,8 +36,8 @@ Autrau настраивается двумя способами: **файл ко
   "voice_memo_dir": "data/voice-memos/",
   "voice_memo_cleanup_after_days": 7,
   "translate_to_en": false,
-  "translation_provider": "libretranslate",
-  "translation_fallback": "argos",
+  "translation_provider": "argos",
+  "translation_fallback": "libretranslate",
   "libretranslate_url": "",
   "libretranslate_key": "",
   "minimax_key": ""
@@ -58,10 +58,10 @@ Autrau настраивается двумя способами: **файл ко
 | `hotkey` | string | `Ctrl+Shift+R` | **v1.5.** Сочетание клавиш для записи голосовой заметки. Настраивается в UI. Работает только когда вкладка в фокусе. Формат: `Ctrl+Shift+R` (модификаторы + клавиша через `+`). |
 | `voice_memo_dir` | string | `data/voice-memos/` | **v1.5.** Папка для голосовых заметок. Создаётся автоматически. |
 | `voice_memo_cleanup_after_days` | int | `7` | **v1.5.** Авто-очистка голосовых заметок: `0` = не удалять; `N>0` = удалять старше N дней. Отдельный лимит от `cleanup_after_days`. |
-| `translate_to_en` | bool | `false` | **v1.5.** Если `true` — после каждой расшифровки создаётся `<имя>.en.txt` (если язык оригинала не английский). |
-| `translation_provider` | string | `libretranslate` | **v1.5.** Провайдер перевода: `libretranslate` (public/бесплатно) \| `argos` (локально, ~280 МБ) \| `minimax` (платно, качество) |
-| `translation_fallback` | string | `argos` | **v1.5.** Fallback провайдер если primary не сработал. Пустая строка = без fallback. |
-| `libretranslate_url` | string | `""` | **v1.5.** URL LibreTranslate. Пусто = публичный `https://libretranslate.com/`. |
+| `translate_to_en` | bool | `false` | **v1.5.** Если `true` — после каждой расшифровки создаётся `<имя>.en.txt` (если язык оригинала не английский). В UI — галочка в шестерёнке → «3.5 🌐 Перевод на английский». |
+| `translation_provider` | string | `argos` | **v1.5.** Провайдер перевода: `argos` (локально, ~336 МБ en↔ru, **работает из коробки** после `📥 Установить Argos` в UI) \| `libretranslate` (⚠️ публичные инстансы мертвы, только self-hosted) \| `minimax` (платный API, ключ в `~/.minimax/auth.json`) |
+| `translation_fallback` | string | `libretranslate` | **v1.5.** Fallback провайдер если primary не сработал. Пустая строка = без fallback. |
+| `libretranslate_url` | string | `""` | **v1.5.** URL LibreTranslate. Пусто = `https://libretranslate.com/` (⚠️ мёртв в 2025). |
 | `libretranslate_key` | string | `""` | **v1.5.** API-ключ LibreTranslate (если self-hosted требует). |
 | `minimax_key` | string | `""` | **v1.5.** API-ключ MiniMax. Пусто = авто-поиск в `~/.minimax/auth.json`. |
 

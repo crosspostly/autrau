@@ -20,6 +20,7 @@ pip install -r requirements.txt
 ```bash
 pip install pywhispercpp            # whisper.cpp
 pip install -r requirements-parakeet.txt   # Parakeet v3 (NVIDIA GPU + CUDA)
+pip install argostranslate langdetect      # Translation: Argos (v1.5.1+)
 ```
 
 ## Команды
@@ -31,6 +32,7 @@ pip install -r requirements-parakeet.txt   # Parakeet v3 (NVIDIA GPU + CUDA)
 | `python -m tools.update --check` | Только проверить обновления (приложение + модели) |
 | `python -m tools.update --app` | Обновить приложение: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` |
 | `python -m compileall -q providers tools server.py` | Компиляционная проверка всех Python-файлов (то же, что гоняет CI) |
+| `python -c "from tools import translation; tr.translate('hello', 'ru', provider_name='minimax')"` | Тест провайдера перевода напрямую (если есть MiniMax ключ) |
 
 ## Стиль кода
 
@@ -63,3 +65,12 @@ pip install -r requirements-parakeet.txt   # Parakeet v3 (NVIDIA GPU + CUDA)
 4. Готово — UI и API подхватят провайдера без изменений; не забудьте обновить списки моделей в доках.
 
 Подробности внутреннего устройства — в [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Как добавить новый провайдер перевода
+
+1. Создайте подкласс `TranslationProvider` в `tools/translation.py` (см. ABC: `name: str`, `is_available() -> (bool, str)`, `translate(text, source, target) -> str`).
+2. Зарегистрируйте в `get_provider(name)` (рядом с существующими `minimax` / `libretranslate` / `argos`).
+3. При необходимости добавьте конфиг-ключ в `tools/config.py:DEFAULTS` (например, `my_provider_url`).
+4. Готово — UI подхватит провайдера через `/api/translate/providers` (для отображения badge) + `/api/translate` (для перевода).
+
+Модели Argos Translate скачиваются с `https://argos-net.com/v1/<...>.argosmodel` (НЕ `argosopentech.com` — мёртв с 2024) по индексу `https://raw.githubusercontent.com/argosopentech/argospm-index/main/`.

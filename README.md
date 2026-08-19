@@ -25,15 +25,15 @@
 ## ✨ Возможности
 
 - 🎙️ **Голосовые заметки** — нажмите `Ctrl+Shift+R` (настраивается) и говорите: запись → авто-транскрипция → сохраняется в `data/voice-memos/` (отдельный раздел «Голосовые заметки» с собственной политикой авто-очистки, 7 дней по умолчанию)
-- 🌐 **Автоперевод на английский** (opt-in, по умолчанию **выключен**) — после каждой расшифровки автоматически создаётся `<имя>.en.txt`. **Внимание:** публичные LibreTranslate инстансы мертвы в 2025, Argos Translate install проблемный (зависает). **Чтобы реально работало:** установите Argos вручную (`py -3.13 -m pip install argostranslate` + скачайте модель) или используйте MiniMax API (ключ в `~/.minimax/auth.json`). Подробности — в карточке "🌐 Перевод на английский" в UI.
-- 🧠 **2 движка, 3 модели** — Whisper.cpp (tiny 75 МБ, large-v3 2.9 ГБ) или Parakeet v3 ONNX (640 МБ)
+- 🌐 **Автоперевод на английский** (opt-in, по умолчанию **выключен**) — после каждой расшифровки автоматически создаётся `<имя>.en.txt` и badge 🇬🇧 EN рядом с файлом. **Три провайдера:** **Argos Translate** (локально, ~336 МБ en↔ru, **работает из коробки** после `📥 Установить Argos` в UI), **LibreTranslate** (⚠️ публичные инстансы мертвы в 2025 — только self-hosted), **MiniMax** (платный API, ключ в `~/.minimax/auth.json`). Настраивается в шестерёнке → «3.5 🌐 Перевод на английский».
+- 🧠 **2 движка, 3 модели** — Whisper.cpp (tiny 75 МБ, large-v3 2.9 ГБ) или Parakeet v3 ONNX (640 МБ). После транскрипции — автоперевод на английский через локальный Argos Translate (~336 МБ en↔ru, без облака)
 - 📁 **Очередь файлов** — выберите несколько, жмите «Транскрибировать», они обработаются по очереди
 - ⭐ **Избранное** — помеченные расшифровки никогда не удаляются авто-очисткой
 - 🗑 **Bulk-удаление** — чекбокс «Выбрать все» в обеих секциях (файлы + голосовые заметки)
 - 🎬 **Видео тоже работает** — mp4/mkv/mov/avi/webm: звук извлекается автоматически через ffmpeg
 - 🔄 **Авто-обновления** — проверка новых коммитов приложения и новых версий **только скачанных** моделей
 - 🧹 **Авто-очистка расшифровок** — старые расшифровки удаляются автоматически по возрасту (или вручную)
-- 🗂 **Архив расшифровок** — каждая расшифровка сохраняется в `data/transcripts/`; в UI — список с галочками, удаление файлов с подтверждением, кнопка «Открыть папку»
+- 🗂 **Архив расшифровок** — каждая расшифровка сохраняется в `data/transcripts/`; голосовые заметки — в `data/voice-memos/` (отдельный таб в UI); в обоих разделах — чекбоксы, bulk-удаление, кнопка «Открыть папку». Избранные (★) никогда не удаляются авто-очисткой.
 - 🖥 **Web UI** — без сборщиков, один `index.html`; drag-and-drop, тёмная тема
 
 ---
@@ -80,6 +80,11 @@ pip install -r requirements-parakeet.txt
 
 # Parakeet v3 (ONNX/DirectML) — без NVIDIA: любой GPU через DirectX или CPU
 pip install onnx-asr[hub] onnxruntime-directml
+
+# Translation: Argos Translate (локально, en↔ru, ~336 МБ)
+pip install argostranslate langdetect
+py -3.13 -c "from argostranslate import package; package.update_package_index(); [package.get_available_packages() | None for _ in [None]]"  # опционально — UI установит сам
+# Или в UI: шестерёнка → «3.5 🌐 Перевод» → «📥 Установить Argos»
 ```
 
 ## 🎧 Использование
@@ -156,10 +161,12 @@ autrau/
 │   ├── config.py          # persistent user config (data/config.json)
 │   ├── check.py           # диагностика (python -m tools.check)
 │   ├── update.py          # self + model update (python -m tools.update)
-│   └── cleanup.py         # авто-очистка расшифровок
+│   ├── cleanup.py         # авто-очистка расшифровок
+│   └── translation.py     # провайдеры перевода (Argos/LibreTranslate/MiniMax)
 ├── data/                  # локальные данные (в .gitignore)
 │   ├── config.json        # конфигурация
 │   ├── transcripts/       # архив расшифровок
+│   ├── voice-memos/       # голосовые заметки (отдельный таб в UI)
 │   └── models/            # скачанные модели whisper-cpp
 ├── docs/                  # документация
 ├── start.bat              # 1-click запуск (Windows)
@@ -185,7 +192,16 @@ autrau/
   "compute_type": "auto",
   "check_updates_on_start": true,
   "auto_update_app": false,
-  "cleanup_after_days": 0
+  "cleanup_after_days": 0,
+  "hotkey": "Ctrl+Shift+R",
+  "voice_memo_dir": "data/voice-memos/",
+  "voice_memo_cleanup_after_days": 7,
+  "translate_to_en": false,
+  "translation_provider": "argos",
+  "translation_fallback": "libretranslate",
+  "libretranslate_url": "",
+  "libretranslate_key": "",
+  "minimax_key": ""
 }
 ```
 
@@ -228,8 +244,13 @@ autrau/
 | `GET` | `/api/config` | текущая конфигурация |
 | `POST` | `/api/config` | обновить конфигурацию |
 | `POST` | `/api/cleanup` | очистить расшифровки старше N дней |
-| `GET` | `/api/transcripts` | список расшифровок + флаги избранного |
+| `GET` | `/api/transcripts` | список расшифровок + флаги избранного + `has_translation` |
 | `POST` | `/api/favorites` | пометить/снять избранное (защита от авто-очистки) |
+| `GET/DELETE` | `/api/voice-memos` | список/удаление голосовых заметок (`data/voice-memos/`) |
+| `POST` | `/api/voice/{start,chunk,stop}` | запись голоса (MediaRecorder → ffmpeg → транскрипция) |
+| `POST` | `/api/translate` | перевести текст через argos/libretranslate/minimax |
+| `GET` | `/api/translate/providers` | статус каждого провайдера перевода |
+| `POST` | `/api/translate/install-argos` | установить Argos + en_ru/ru_en модели в фоне |
 | `GET` | `/api/updates` | проверка обновлений (`?stream=1` — SSE) |
 | `POST` | `/api/updates/app` | self-update (git pull + pip upgrade) |
 | `POST` | `/api/model/download` | скачать модель (SSE) |
