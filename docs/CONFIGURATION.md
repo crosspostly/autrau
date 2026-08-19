@@ -31,13 +31,22 @@ Autrau настраивается двумя способами: **файл ко
   "compute_type": "auto",
   "check_updates_on_start": true,
   "auto_update_app": false,
-  "cleanup_after_days": 0
+  "cleanup_after_days": 0,
+  "hotkey": "Ctrl+Shift+R",
+  "voice_memo_dir": "data/voice-memos/",
+  "voice_memo_cleanup_after_days": 7,
+  "translate_to_en": false,
+  "translation_provider": "libretranslate",
+  "translation_fallback": "argos",
+  "libretranslate_url": "",
+  "libretranslate_key": "",
+  "minimax_key": ""
 }
 ```
 
 | Ключ | Тип | По умолчанию | Описание |
 |---|---|---|---|
-| `provider` | string | `faster-whisper` | Активный провайдер: `faster-whisper` \| `whisper-cpp` \| `parakeet` |
+| `provider` | string | `faster-whisper` | Активный провайдер: `faster-whisper` \| `whisper-cpp` \| `parakeet` \| `parakeet-onnx` |
 | `model` | string | `small` | Модель внутри провайдера (зависит от провайдера) |
 | `device` | string | `cpu` | Устройство: `cpu` \| `cuda` |
 | `language` | string | `ru` | Язык распознавания по умолчанию (`auto` = автоопределение) |
@@ -45,7 +54,16 @@ Autrau настраивается двумя способами: **файл ко
 | `compute_type` | string | `auto` | Тип вычислений: `auto` \| `int8` \| `float16` \| `float32` |
 | `check_updates_on_start` | bool | `true` | Проверять обновления при старте сервера |
 | `auto_update_app` | bool | `false` | Автоматически обновлять приложение при старте *(зарезервировано)* |
-| `cleanup_after_days` | int | `0` | Авто-очистка расшифровок: `0` = не удалять; `N>0` = удалять расшифровки старше N дней |
+| `cleanup_after_days` | int | `0` | Авто-очистка расшифровок из `data/transcripts/`: `0` = не удалять; `N>0` = удалять старше N дней |
+| `hotkey` | string | `Ctrl+Shift+R` | **v1.5.** Сочетание клавиш для записи голосовой заметки. Настраивается в UI. Работает только когда вкладка в фокусе. Формат: `Ctrl+Shift+R` (модификаторы + клавиша через `+`). |
+| `voice_memo_dir` | string | `data/voice-memos/` | **v1.5.** Папка для голосовых заметок. Создаётся автоматически. |
+| `voice_memo_cleanup_after_days` | int | `7` | **v1.5.** Авто-очистка голосовых заметок: `0` = не удалять; `N>0` = удалять старше N дней. Отдельный лимит от `cleanup_after_days`. |
+| `translate_to_en` | bool | `false` | **v1.5.** Если `true` — после каждой расшифровки создаётся `<имя>.en.txt` (если язык оригинала не английский). |
+| `translation_provider` | string | `libretranslate` | **v1.5.** Провайдер перевода: `libretranslate` (public/бесплатно) \| `argos` (локально, ~280 МБ) \| `minimax` (платно, качество) |
+| `translation_fallback` | string | `argos` | **v1.5.** Fallback провайдер если primary не сработал. Пустая строка = без fallback. |
+| `libretranslate_url` | string | `""` | **v1.5.** URL LibreTranslate. Пусто = публичный `https://libretranslate.com/`. |
+| `libretranslate_key` | string | `""` | **v1.5.** API-ключ LibreTranslate (если self-hosted требует). |
+| `minimax_key` | string | `""` | **v1.5.** API-ключ MiniMax. Пусто = авто-поиск в `~/.minimax/auth.json`. |
 
 `cleanup_after_days` применяется фоновым циклом (каждые 6 часов) и при ручном `POST /api/cleanup`.
 

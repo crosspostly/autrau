@@ -17,8 +17,20 @@
 | `GET` | `/api/config` | Текущая конфигурация (JSON) |
 | `POST` | `/api/config` | Обновить ключи конфигурации |
 | `POST` | `/api/cleanup` | Удалить расшифровки старше N дней |
-| `GET` | `/api/transcripts` | Список расшифровок + флаги избранного |
+| `GET` | `/api/transcripts` | Список расшифровок + флаги избранного + наличие `.en.txt` |
+| `GET` | `/api/transcripts/{name}` | Скачать/открыть один `.txt` |
+| `DELETE` | `/api/transcripts` | Удалить выбранные расшифровки (body: `{"names": [...]}`) |
+| `POST` | `/api/transcripts/open-folder` | Открыть папку `data/transcripts/` в проводнике |
 | `POST` | `/api/favorites` | Пометить/снять избранное (защита от авто-очистки) |
+| `GET` | `/api/voice-memos` | Список голосовых заметок + наличие `.en.txt` |
+| `GET` | `/api/voice-memos/{name}` | Скачать одну голосовую заметку |
+| `DELETE` | `/api/voice-memos` | Удалить выбранные голосовые заметки |
+| `POST` | `/api/voice-memos/open-folder` | Открыть папку `data/voice-memos/` в проводнике |
+| `POST` | `/api/voice/start` | Начать сессию записи (возвращает `id`) |
+| `POST` | `/api/voice/chunk` | Добавить аудио-чанк (multipart, `id` + `chunk`) |
+| `POST` | `/api/voice/stop` | Финализировать сессию: склейка → транскрипция → сохранение в voice-memos |
+| `POST` | `/api/translate` | Перевести текст (body: `{text, target?, source?, provider?, fallback?}`) |
+| `GET` | `/api/translate/providers` | Какие провайдеры перевода доступны прямо сейчас |
 | `GET` | `/api/updates` | Проверка обновлений (JSON; `?stream=1` — SSE-прогресс) |
 | `POST` | `/api/updates/app` | Self-update: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` |
 | `POST` | `/api/model/download` | Скачать модель (SSE-прогресс) |
@@ -72,6 +84,28 @@
 ```
 
 `POST /api/favorites` — тело `{"name": "файл.txt"}` переключает (toggle) состояние; `{"name": "файл.txt", "favorite": true|false}` задаёт явно. Избранные расшифровки защищены от авто-очистки (`run_cleanup` пропускает их до проверки возраста); снятие ярлыка снова делает файл кандидатом на удаление при следующем прогоне. `404`, если файл не существует. Ответ — `{"name": "...", "is_favorite": true|false}`.
+
+### Voice memos (v1.5)
+
+`GET /api/voice-memos` — список голосовых заметок из `data/voice-memos/` с теми же полями что и `/api/transcripts` + `has_translation` (есть ли `<имя>.en.txt`) и `translation_name`.
+
+`GET /api/voice-memos/{name}` — отдать один `.txt`. `404` если нет.
+
+`DELETE /api/voice-memos` — body: `{"names": [...]}`. Имена sanitized через `Path.name`. Ответ: `{"ok": true, "deleted": [...], "missing": [...]}`.
+
+`POST /api/voice-memos/open-folder` — открыть `data/voice-memos/` в проводнике.
+
+`POST /api/voice/start` — создать сессию записи. Ответ: `{"id": "...", "started_at": "ISO"}`. `id` живёт до стопа/перезагрузки.
+
+`POST /api/voice/chunk` — multipart: `id` (form field) + `chunk` (file, `audio/webm`). На каждый чанк возвращает `{"id", "received_bytes", "total_chunks"}`. `404` если id не найден.
+
+`POST /api/voice/stop` — body: `{"id": "...", "language": "ru"}` (опционально). Склеивает все чанки сессии → конвертирует через ffmpeg (если нужно) → транскрибирует активным провайдером → сохраняет в `data/voice-memos/<timestamp>.txt`. Если включён `translate_to_en` — создаёт `<timestamp>.en.txt`. Ответ: `{"id", "text", "file", "dir"}`. Параметр `_cancel: true` — сессия дропается без транскрипции (используется при отмене записи).
+
+### Translation (v1.5)
+
+`POST /api/translate` — body: `{"text": "...", "target": "en", "source": "auto", "provider": "minimax" | "libretranslate" | "argos", "fallback": "..."}`. Поля `provider`/`fallback`/`libretranslate_url`/`libretranslate_key`/`minimax_key` опциональны — берутся из `data/config.json` если не указаны. Ответ: `{"translated": "...", "provider": "minimax", "target": "en"}`. `502` если все провайдеры недоступны.
+
+`GET /api/translate/providers` — статус каждого провайдера: `{"providers": [{"name", "available", "reason"}, ...], "translate_to_en": bool}`. Удобно для UI: показывает какие провайдеры реально работают.
 
 `POST /api/provider/install` — тело `{"provider": "whisper-cpp"}`; ответ `{"ok": true, "log": [...]}` (последние ~50 строк вывода pip).
 

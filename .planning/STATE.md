@@ -2,9 +2,9 @@
 gsd_state:
   version: 1
   milestone: v1.5
-  status: in_progress
-  current_phase: 2
-  current_phase_name: "Горячие клавиши + голосовые"
+  status: complete
+  current_phase: 4
+  current_phase_name: "Polish + docs"
   last_updated: 2026-08-19
 ---
 
@@ -12,18 +12,18 @@ gsd_state:
 
 ## Current Position
 
-**Phase:** 2 — Горячие клавиши + вкладка «Голосовые заметки»
-**Status:** pending (NOT STARTED)
-**Next action:** Начать с 2.1 (Backend: voice-memos API)
+**Phase:** 4 — Polish + docs ✅ DONE
+**Status:** milestone complete
+**Next action:** start v1.6 (portable Windows exe) when ready
 
 ## Progress
 
-| Phase | Status         | Done at    |
-|-------|----------------|------------|
-| 1     | ✅ done         | 2026-08-19 |
-| 2     | 🔄 pending     | -          |
-| 3     | 🔄 pending     | -          |
-| 4     | 🔄 pending     | -          |
+| Phase | Status         | Done at    | Commits |
+|-------|----------------|------------|---------|
+| 1     | ✅ done         | 2026-08-19 | 3d10ebc |
+| 2     | ✅ done         | 2026-08-19 | 428db5c, f32af6e, 1f829f1, 6b5c47f, ca29069, 64b4934 |
+| 3     | ✅ done         | 2026-08-19 | f13bdb6, 8f7428e, 358992f |
+| 4     | ✅ done         | 2026-08-19 | docs + .planning update |
 
 ## Hot fixes (вне phase)
 

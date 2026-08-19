@@ -48,12 +48,17 @@
 - Расширение исходного файла в имени транскрипта
 - Git sync: `dc9ce30` → `0791b32` → `d2dca74` → `3d10ebc` (последний)
 
-## v1.5 — Handi-like UX (текущий)
+## v1.5 — Handi-like UX ✅ SHIPPED 2026-08-19
 
-- 🔄 Горячие клавиши для реал-тайм записи
-- 🔄 Автоперевод ru→en
-- 🔄 Вкладка «Голосовые заметки»
-- ✅ Расширение файла + KB (вне фазы, hotfix)
+- ✅ Горячие клавиши для реал-тайм записи (MediaRecorder + Ctrl+Shift+R + floating overlay)
+- ✅ Автоперевод ru→en (LibreTranslate default, Argos local opt-in, MiniMax premium)
+- ✅ Вкладка «Голосовые заметки» в расшифровках (отдельный `data/voice-memos/`, своя очистка)
+- ✅ Bulk-удаление с «Выбрать все» (в обоих разделах)
+- ✅ Настройки свернуты за шестерёнкой (меньше шума)
+- ✅ Расширение файла + KB (hotfix в Phase 1)
+- ✅ Hero text обновлён (Faster-Whisper убран из описания)
+- ✅ docs/CONFIGURATION.md, docs/ROADMAP.md, .planning/STATE.md обновлены
+- Commits: 3d10ebc, 428db5c, f32af6e, 1f829f1, 6b5c47f, ca29069, 64b4934, f13bdb6, 8f7428e, 358992f
 
 ---
 
