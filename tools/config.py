@@ -31,6 +31,14 @@ DEFAULTS: dict[str, Any] = {
     "hotkey": "Ctrl+Shift+R",           # global hotkey to start/stop voice recording
     "voice_memo_dir": "data/voice-memos/",  # where to save voice memos
     "voice_memo_cleanup_after_days": 7, # 0 = keep forever; N>0 = auto-delete older than N days
+
+    # v1.5: Auto-translation
+    "translate_to_en": False,           # if True, after each transcription save *.en.txt
+    "translation_provider": "libretranslate",  # "libretranslate" | "argos" | "minimax"
+    "translation_fallback": "argos",    # if primary fails (only used if installed)
+    "libretranslate_url": "",           # empty = use public instance
+    "libretranslate_key": "",           # optional API key
+    "minimax_key": "",                  # empty = auto-discover from ~/.minimax/auth.json
 }
 
 
