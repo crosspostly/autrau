@@ -542,6 +542,11 @@
     .t-del:hover { border-color: var(--error); color: var(--error); background: rgba(248, 113, 113, 0.08); }
 
     /* Tabs: Files vs Voice memos */
+    #settingsHeader { transition: color 0.15s; }
+    #settingsHeader:hover { color: var(--accent-2); }
+    #settingsHeader:hover #settingsChevron { opacity: 1; transform: rotate(30deg); }
+    #settingsChevron { display: inline-block; transition: transform 0.2s, opacity 0.2s; }
+
     .trans-tab {
       padding: 6px 12px; font-size: 13px; cursor: pointer;
       background: rgba(255,255,255,0.04); border: 1px solid var(--border);
@@ -768,7 +773,12 @@
 
     <!-- Settings -->
     <div class="card">
-      <h2><span class="num">3</span> Настройки</h2>
+      <h2 id="settingsHeader" style="cursor:pointer; user-select:none; display:flex; align-items:center; gap:8px;" title="Кликните, чтобы развернуть/свернуть">
+  <span class="num">3</span>
+  <span style="flex:1">Настройки</span>
+  <span id="settingsChevron" style="font-size:14px; color:var(--text-muted); transition:transform 0.2s;">⚙️</span>
+</h2>
+<div id="settingsBody" class="hidden">
 
       <!-- Обновления приложения — внутри настроек -->
       <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
@@ -833,6 +843,7 @@
         </div>
       </div>
     </div>
+    </div><!-- /settingsBody -->
 
     <!-- Transcripts -->
     <div class="card">
@@ -2140,6 +2151,23 @@
       } catch (e) {}
     });
     // bindHotkey() called from init() after cfg is loaded
+
+    // ===== Settings collapse (gear icon) =====
+    const settingsHeader = $('settingsHeader');
+    const settingsBody = $('settingsBody');
+    const settingsChevron = $('settingsChevron');
+    function applySettingsState(open) {
+      settingsBody.classList.toggle('hidden', !open);
+      settingsChevron.style.transform = open ? 'rotate(0deg)' : 'rotate(0deg)';
+      settingsChevron.textContent = open ? '⚙️' : '⚙️';
+      settingsChevron.style.opacity = open ? '1' : '0.5';
+    }
+    // Default state: collapsed
+    applySettingsState(false);
+    settingsHeader.addEventListener('click', () => {
+      const isOpen = !settingsBody.classList.contains('hidden');
+      applySettingsState(!isOpen);
+    });
 
     // ===== UPDATES =====
     $('checkUpdates').addEventListener('click', checkUpdates);
