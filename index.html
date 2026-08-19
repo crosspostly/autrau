@@ -842,6 +842,28 @@
           </div>
         </div>
       </div>
+
+      <!-- Автоперевод на английский -->
+      <div class="row" style="margin-top: 18px;">
+        <div style="flex: 1 1 100%; max-width: 460px;">
+          <label for="translateToEn">Автоперевод расшифровок на английский</label>
+          <div style="display:flex; gap:10px; align-items:center; margin-top:6px;">
+            <input type="checkbox" id="translateToEn" style="width:18px; height:18px; cursor:pointer;">
+            <select id="translateProvider" style="padding:6px 8px; font-size:13px;">
+              <option value="libretranslate">LibreTranslate (public, бесплатно)</option>
+              <option value="argos">Argos Translate (локально, ~280 МБ)</option>
+              <option value="minimax">MiniMax (платно, качество)</option>
+            </select>
+            <button class="secondary" id="saveTranslate">💾 Сохранить</button>
+          </div>
+          <div class="small" style="margin-top:8px; opacity:.75;">
+            Если включено — после каждой расшифровки создаётся <code>&lt;имя&gt;.en.txt</code> рядом.
+            Для <b>Argos</b> сначала: <code>pip install argostranslate</code> +
+            <code>argospm install translate-en_ru</code> (~280 МБ, локально, без облака).
+          </div>
+          <div class="small" id="translateStatus" style="margin-top:6px;"></div>
+        </div>
+      </div>
     </div>
     </div><!-- /settingsBody -->
 
@@ -947,6 +969,8 @@
         const cd = parseInt(cfg.cleanup_after_days, 10);
         $('cleanupDays').value = Number.isFinite(cd) && cd >= 0 ? cd : 0;
         if (cfg.hotkey) $('hotkeyInput').value = cfg.hotkey;
+        $('translateToEn').checked = !!cfg.translate_to_en;
+        if (cfg.translation_provider) $('translateProvider').value = cfg.translation_provider;
 
         renderModelSelect();
         updatePresetLabels();
@@ -1715,6 +1739,8 @@
       const wrap = $('transcriptsList');
       const selAll = $('transcriptsSelectAll');
       const _emptyMsg = emptyMsg || 'Пока нет расшифровок — после распознавания файл появится здесь.';
+      const isVoice = state.activeTab === 'voice';
+      const baseApi = isVoice ? '/api/voice-memos' : '/api/transcripts';
       // убираем отметки для файлов, которых уже нет
       const alive = new Set(items.map(t => t.name));
       for (const name of [...selectedSet]) if (!alive.has(name)) selectedSet.delete(name);
@@ -1735,8 +1761,17 @@
                   title="${t.is_favorite ? 'Убрать из избранного — файл снова удаляется штатно' : 'Добавить в избранное — не будет удаляться авто-очисткой'}">
             ${t.is_favorite ? '★' : '☆'}
           </button>
-          <span class="tname"><a class="tlink" href="${API}/api/transcripts/${encodeURIComponent(t.name)}"
-             target="_blank" rel="noopener" title="Открыть файл расшифровки">${esc(t.name)}</a></span>
+          <span class="tname"><a class="tlink" href="${API}${baseApi}/${encodeURIComponent(t.name)}"
+             target="_blank" rel="noopener" title="Открыть файл расшифровки">${esc(t.name)}</a>
+            ${t.has_translation && t.translation_name
+              ? `<a class="t-en-badge" href="${API}${baseApi}/${encodeURIComponent(t.translation_name)}"
+                 target="_blank" rel="noopener" title="Открыть перевод на английский (${esc(t.translation_name)})"
+                 style="margin-left:6px; padding:2px 6px; font-size:10px; font-weight:700;
+                        background:rgba(110,231,183,0.16); color:var(--accent-2);
+                        border:1px solid rgba(110,231,183,0.4); border-radius:6px;
+                        text-decoration:none; vertical-align:middle;">🇬🇧 EN</a>`
+              : ''}
+          </span>
           <span class="tmeta">${t.size_mb < 1 ? t.size_kb+' КБ' : t.size_mb+' МБ'} · ${fmtDate(t.modified)}</span>
           <button class="t-del" data-name="${esc(t.name)}" title="Удалить этот файл">🗑</button>
         </div>`).join('');
@@ -2151,6 +2186,45 @@
       } catch (e) {}
     });
     // bindHotkey() called from init() after cfg is loaded
+
+    // ----- Translation settings -----
+    async function checkTranslateProviders() {
+      const st = $('translateStatus');
+      st.textContent = 'проверяю провайдеров …';
+      try {
+        const r = await fetch(API + '/api/translate/providers');
+        const j = await r.json();
+        const lines = (j.providers || []).map(p => {
+          if (p.available) return '✓ ' + p.name;
+          return '✗ ' + p.name + (p.reason ? ' (' + p.reason.slice(0, 50) + ')' : '');
+        });
+        st.innerHTML = lines.join(' · ') + (j.translate_to_en ? ' · <b>включён</b>' : ' · выключен');
+      } catch (e) {
+        st.textContent = '⚠️ ' + e.message;
+      }
+    }
+    $('saveTranslate').addEventListener('click', async () => {
+      const st = $('translateStatus');
+      st.textContent = 'сохраняю …';
+      const body = {
+        translate_to_en: $('translateToEn').checked,
+        translation_provider: $('translateProvider').value,
+      };
+      try {
+        const r = await fetch(API + '/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        Object.assign(cfg, body);
+        st.textContent = '✓ сохранено';
+        checkTranslateProviders();
+      } catch (e) {
+        st.textContent = '❌ ' + e.message;
+      }
+    });
+    // Check providers on init
+    setTimeout(checkTranslateProviders, 500);
 
     // ===== Settings collapse (gear icon) =====
     const settingsHeader = $('settingsHeader');

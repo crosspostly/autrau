@@ -136,6 +136,13 @@ def list_voice_memos() -> list[dict[str, Any]]:
             st = f.stat()
         except OSError:
             continue
+        has_translation = False
+        translation_name = None
+        if f.suffix == ".txt" and not f.stem.endswith(".en"):
+            candidate = f.with_name(f.stem + ".en.txt")
+            if candidate.is_file():
+                has_translation = True
+                translation_name = candidate.name
         result.append(
             {
                 "name": f.name,
@@ -143,6 +150,8 @@ def list_voice_memos() -> list[dict[str, Any]]:
                 "size_mb": round(st.st_size / 1048576, 2),
                 "size_kb": round(st.st_size / 1024, 1),
                 "modified": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+                "has_translation": has_translation,
+                "translation_name": translation_name,
             }
         )
     return result
@@ -187,6 +196,14 @@ def list_transcripts() -> list[dict[str, Any]]:
             st = f.stat()
         except OSError:
             continue
+        # Поиск перевода (если есть <stem>.en.txt)
+        has_translation = False
+        translation_name = None
+        if f.suffix == ".txt" and not f.stem.endswith(".en"):
+            candidate = f.with_name(f.stem + ".en.txt")
+            if candidate.is_file():
+                has_translation = True
+                translation_name = candidate.name
         result.append(
             {
                 "name": f.name,
@@ -194,6 +211,8 @@ def list_transcripts() -> list[dict[str, Any]]:
                 "size_mb": round(st.st_size / 1048576, 2),
                 "size_kb": round(st.st_size / 1024, 1),
                 "modified": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+                "has_translation": has_translation,
+                "translation_name": translation_name,
             }
         )
     return result
