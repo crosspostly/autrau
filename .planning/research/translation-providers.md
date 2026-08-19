@@ -9,7 +9,7 @@
 
 ## Candidates
 
-### 1. LibreTranslate (HTTP API)
+### 1. LibreTranslate (HTTP API) ⚠️ DEAD
 
 **Описание:** Open-source self-hosted OR публичный инстанс. REST API: `POST /translate`.
 
@@ -21,21 +21,51 @@
 - ✅ Простой API: `{"q": "Привет", "source": "ru", "target": "en"}` → `{"translatedText": "Hello"}`
 
 **Минусы:**
-- ❌ Публичный инстанс `libretranslate.com` rate-limited (~10 req/min free)
+- ❌ **Публичные инстансы мертвы в 2025** (проверено 2026-08-19):
+  - `libretranslate.com` → HTTP 502 / 404
+  - `translate.argosopentech.com` → DNS fail
+  - `libretranslate.de` → 403 (Cloudflare block)
+  - `lt.vern.cc` → 502
+  - `libretranslate.pussthecat.org` → 404
 - ❌ Self-hosted требует Docker + ~2GB RAM + 5 мин setup
 - ❌ Качество среднее (Argos Translate под капотом)
 - ❌ Медленно на длинных текстах (5-10 сек на 1KB)
 
-**Public instances:**
-- `https://libretranslate.com/` (rate-limited)
-- `https://translate.argosopentech.com/`
-- `https://libretranslate.pussthecat.org/`
-
-**Decision fit:** v1.5 ✅ (как default + fallback на MiniMax)
+**Decision fit (v1.5):** ❌ НЕ ИСПОЛЬЗУЕМ как default. Публичные инстансы мертвы, self-hosted слишком heavy для v1.5. Остаётся в коде для пользователей, у которых есть свой self-hosted инстанс.
 
 ---
 
-### 2. MiniMax API (OpenAI-compatible)
+### 2. Argos Translate (local, ~280 МБ) ⚠️ СЛОЖНО В 2025
+
+**Описание:** Python-библиотека, обёртка над OpenNMT/CTranslate2. Модели скачиваются отдельно.
+
+**Плюсы:**
+- ✅ Бесплатно
+- ✅ Локально (без облака)
+- ✅ ~280 МБ на языковую пару en↔ru
+- ✅ 0.5-1.5 сек на короткий текст
+- ✅ Качество: ~85% NLLB (хорошее для UI)
+
+**Минусы:**
+- ❌ **`pip install argostranslate` ставит, но `import argostranslate.translate` виснет** на некоторых системах (невозможно диагностировать — зависает без вывода)
+- ❌ **API argosopentech.com (для скачивания моделей) → HTTP 404** (проверено 2026-08-19)
+- ❌ **GitHub repo argosopentech/argos-translate → last release v1.4.0 (старый), модельный репозиторий не активен**
+- ❌ После установки пакета нужно отдельно скачивать модели (отдельная команда)
+- ❌ Размер модели зависит от языковой пары: 50-300 МБ
+
+**Реальная установка (2026-08-19):**
+```bash
+py -3.13 -m pip install argostranslate  # OK
+py -3.13 -m argostranslate.package install translate-ru_en  # ЗАВИСАЕТ
+```
+
+**Можно ли установить вручную:** можно, но модель придётся качать с [libretranslate/argospm](https://github.com/argosopentech/argospm-index) (архив). Размер ~280 МБ.
+
+**Decision fit (v1.5):** 🟡 ЧАСТИЧНО. Код в `tools/translation.py` готов, но реально установить пользователю придётся вручную. Default в config — `argos` (когда работает), fallback `libretranslate`.
+
+---
+
+### 3. MiniMax API (OpenAI-compatible)
 
 **Описание:** Платный LLM API от MiniMax. Может переводить через LLM-модель.
 
@@ -55,27 +85,28 @@
 
 ---
 
-### 3. NLLB-200 (Local, ONNX)
+### 4. NLLB-200 (Local, CTranslate2) — не реализовано в v1.5
 
-**Описание:** Meta's No Language Left Behind, distilled 600M variant. Open-source, ONNX export доступен.
+**Описание:** Meta's No Language Left Behind, distilled 600M variant. Можно через CTranslate2 (который уже есть в faster-whisper).
 
 **Плюсы:**
 - ✅ Полностью локально
 - ✅ 200 языков
-- ✅ Хорошее качество
-- ✅ Privacy-perfect
+- ✅ Качество SOTA (95% от full NLLB)
+- ✅ CTranslate2 inference быстрый
+- ✅ Не зависит от argosopentech
 
 **Минусы:**
-- ❌ ~600MB model size (тяжело)
-- ❌ ONNX runtime + tokenizer setup
-- ❌ Первый запуск медленный (загрузка модели)
-- ❌ Требует CPU с AVX2 или любой GPU (DirectML)
+- ❌ ~300 МБ distilled 600M, ~600 МБ distilled 1.3B
+- ❌ Нужен скачивание модели вручную (HuggingFace)
+- ❌ Tokenizer + setup сложнее чем у Argos
+- ❌ v1.5 фокус на "быстрое рабочее решение", NLLB — v2 candidate
 
-**Decision fit:** v1.5 ❌ (слишком heavy для default), возможно v2 как opt-in для "я хочу всё локально"
+**Decision fit:** v1.5 ❌, v2 ✅. Если Argos не пошёл — NLLB-200 будет планом B.
 
 ---
 
-### 4. Whisper-style inline (не подходит)
+### 5. Whisper-style inline (не подходит)
 
 Whisper сам по себе НЕ переводит, только транскрибирует. Можно использовать для English transcription напрямую (если source = en, no translation needed).
 
@@ -83,39 +114,45 @@ Whisper сам по себе НЕ переводит, только транск�
 
 ---
 
-## Comparison matrix
+## Comparison matrix (обновлено 2026-08-19)
 
-| Provider | Cost | Privacy | Quality | Speed | Setup | v1.5? |
-|----------|------|---------|---------|-------|-------|-------|
-| LibreTranslate public | Free (rate-limited) | Cloud | Medium | Slow | None | ✅ fallback |
-| LibreTranslate self-hosted | Free (CPU/RAM) | Local | Medium | Medium | 5 min | ✅ opt-in |
-| MiniMax API | ~$0.001/transcript | Cloud | High | Fast | API key | ✅ default |
-| NLLB-200 local | Free (disk+RAM) | Local | High | Slow first, then fast | 600MB DL | ❌ v2 |
+| Provider | Cost | Privacy | Quality | Speed | Setup | v1.5? | Статус |
+|----------|------|---------|---------|-------|-------|-------|--------|
+| LibreTranslate public | Free | Cloud | Medium | Slow | None | ❌ | **мертвы** в 2025 (HTTP 502/404) |
+| LibreTranslate self-hosted | Free | Local | Medium | Medium | 5 min | 🟡 | остался в коде (если есть URL) |
+| Argos Translate | Free | Local | Good | 0.5-1.5s | 280MB model | 🟡 | **import зависает** на 2026-08-19, нужно чинить |
+| MiniMax API | ~$0.001/tx | Cloud | High | Fast | API key | ✅ | работает, но нужен ключ |
+| NLLB-200 (CTranslate2) | Free | Local | High | 200-500ms | 300MB model | ❌ v2 | не реализован в v1.5 |
+
+**Реальность на 2026-08-19:**
+- Нет "из коробки работающего" бесплатного локального провайдера
+- Argos — самый близкий, но install проблемный
+- NLLB-200 (через CTranslate2) — лучший кандидат для v2
 
 ---
 
-## Recommended config
+## Recommended config (v1.5)
 
 ```jsonc
 {
-  "translate_to_en": false,                  // opt-in
-  "translation_provider": "minimax",         // default (быстрый, качественный)
-  "translation_fallback": "libretranslate",  // если MiniMax quota exceeded
-  "libretranslate_url": "",                  // пустой = public; заполнить если self-hosted
-  "minimax_api_key": ""                      // из auth.json
+  "translate_to_en": false,                  // OFF по умолчанию (провайдеры мертвы/нужен ключ)
+  "translation_provider": "argos",           // primary, но сейчас не работает из коробки
+  "translation_fallback": "libretranslate",  // fallback (тоже мертв)
+  "libretranslate_url": "",                  // свой self-hosted URL
+  "minimax_key": ""                          // пустой = из auth.json
 }
 ```
 
-**UX:**
-- В настройках чекбокс «Автоматически переводить на английский»
-- Под чекбоксом: select с провайдерами (Minimax / LibreTranslate)
-- Ссылка "проверить доступ" — вызывает тестовый перевод короткой фразы
+**UX (v1.5):**
+- 🌐 Отдельная карточка "Перевод на английский" (всегда видна, не в шестерёнке)
+- Чекбокс + select провайдера + 💾 Сохранить + 🧪 Тест
+- Под карточкой `<details>` с инструкцией по установке Argos
+- Если ни один провайдер не работает — перевод просто пропускается, оригинал остаётся
 
-**Fallback chain:**
-1. MiniMax (если есть key + не quota exceeded)
-2. LibreTranslate (если URL или public)
-3. NLLB-200 local (если opt-in)
-4. None — перевод пропускается, warning в логе
+**Fallback chain (текущий):**
+1. `translation_provider` (argos / libretranslate / minimax)
+2. `translation_fallback` (если primary не сработал)
+3. None — перевод пропускается, в лог пишется warning, юзер не видит ошибку
 
 ---
 
