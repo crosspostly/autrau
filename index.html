@@ -571,6 +571,103 @@
       50% { box-shadow: 0 0 0 6px rgba(248, 113, 113, 0); }
     }
 
+    /* ============================================================
+       Recording overlay (floating, draggable, collapsible)
+       ============================================================ */
+    .rec-overlay {
+      background: rgba(20, 20, 28, 0.96);
+      border: 1px solid rgba(248, 113, 113, 0.5);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.04);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      min-width: 280px;
+      max-width: 420px;
+      overflow: hidden;
+      transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                  height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                  border-radius 0.25s ease,
+                  box-shadow 0.25s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      animation: recSlideIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes recSlideIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .rec-overlay[data-state="minimized"] {
+      min-width: 200px;
+      max-width: 220px;
+      border-radius: 22px;  /* pill shape */
+    }
+    .rec-overlay .rec-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      user-select: none;
+    }
+    .rec-overlay[data-state="expanded"] .rec-header {
+      padding: 14px 18px 8px 18px;
+    }
+    .rec-overlay .rec-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--error);
+      box-shadow: 0 0 8px rgba(248, 113, 113, 0.6);
+      animation: rec-pulse 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .rec-overlay .rec-timer {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-2);
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .rec-overlay .rec-icon-btn {
+      background: transparent;
+      border: 0;
+      color: var(--text-dim);
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .rec-overlay .rec-icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+    .rec-overlay .rec-body {
+      max-height: 200px;
+      overflow: hidden;
+      transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+      opacity: 1;
+      padding: 0 18px 14px 18px;
+    }
+    .rec-overlay[data-state="minimized"] .rec-body {
+      max-height: 0;
+      padding: 0;
+      opacity: 0;
+    }
+    .rec-overlay .rec-text {
+      color: var(--text-dim);
+      max-height: 80px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .rec-overlay .rec-actions { display: flex; gap: 6px; }
+    .rec-overlay.dragging {
+      cursor: grabbing !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(248,113,113,0.3);
+    }
+    .rec-overlay.dragging * { cursor: grabbing !important; }
+
     /* Bulk-selection bar (delete transcripts) */
     .bulk-bar {
       margin-top: 12px; padding: 10px 14px; border: 1px solid rgba(255, 138, 101, 0.35);
@@ -843,7 +940,8 @@
           </div>
           <div class="small" style="margin-top:8px; opacity:.75;">
             Нажмите это сочетание в любой момент, чтобы начать/остановить запись голоса.
-            Работает, когда вкладка с Autrau в фокусе. Для системного хоткея нужен desktop exe (v1.6).
+            Работает, когда вкладка с Autrau в фокусе. Для системного хоткея нужен <b>desktop exe</b>
+            (v1.6: трей, глобальный хоткей, окно поверх всех приложений — Handy-style).
           </div>
         </div>
       </div>
@@ -935,22 +1033,23 @@
     </div>
   </div>
 
-  <!-- Voice recording overlay (hidden by default) -->
-  <div id="recOverlay" class="hidden" style="position:fixed; bottom:24px; right:24px; z-index:9999;
-       background:rgba(20,20,28,0.96); border:1px solid rgba(248,113,113,0.5);
-       border-radius:14px; padding:14px 18px; min-width:280px; max-width:420px;
-       box-shadow:0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(8px);">
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-      <span id="recDot" style="display:inline-block; width:10px; height:10px; border-radius:50%;
-            background:var(--error); animation:rec-pulse 1.5s ease-in-out infinite;"></span>
+  <!-- Voice recording overlay (hidden by default, floating & draggable) -->
+  <div id="recOverlay" class="hidden rec-overlay"
+       data-state="expanded"
+       style="position:fixed; bottom:24px; right:24px; z-index:9999;">
+    <div class="rec-header" id="recDragHandle" style="cursor:grab;">
+      <span id="recDot" class="rec-dot"></span>
       <strong id="recStatus">Recording…</strong>
       <span class="spacer" style="flex:1"></span>
-      <span id="recTimer" style="font-family:'JetBrains Mono',monospace; color:var(--accent-2);">00:00</span>
+      <span id="recTimer" class="rec-timer">00:00</span>
+      <button class="rec-icon-btn" id="recMinimize" title="Свернуть в полоску">─</button>
     </div>
-    <div id="recText" class="small" style="color:var(--text-dim); max-height:80px; overflow:hidden;">Говорите…</div>
-    <div style="display:flex; gap:6px; margin-top:10px;">
-      <button class="danger" id="recStop" style="flex:1;">⏹ Стоп</button>
-      <button class="secondary" id="recCancel" title="Отменить без сохранения">✕</button>
+    <div class="rec-body" id="recBody">
+      <div id="recText" class="small rec-text">Говорите…</div>
+      <div class="rec-actions">
+        <button class="danger" id="recStop" style="flex:1;">⏹ Стоп</button>
+        <button class="secondary" id="recCancel" title="Отменить без сохранения">✕</button>
+      </div>
     </div>
   </div>
 
@@ -2000,13 +2099,147 @@
     }
 
     function showOverlay(status, text) {
-      $('recOverlay').classList.remove('hidden');
+      const ov = $('recOverlay');
+      ov.classList.remove('hidden');
+      ov.dataset.state = 'expanded';  // всегда показываем развёрнутым
+      $('recMinimize').textContent = '─';
+      $('recMinimize').title = 'Свернуть в полоску';
       $('recStatus').textContent = status;
       $('recText').textContent = text;
     }
     function hideOverlay() {
       $('recOverlay').classList.add('hidden');
     }
+
+    // ===== Recording overlay: drag, minimize, snap-to-edge =====
+    (function setupRecOverlayInteractions() {
+      const ov = $('recOverlay');
+      const handle = $('recDragHandle');
+      const minimizeBtn = $('recMinimize');
+      if (!ov || !handle || !minimizeBtn) return;
+
+      // Minimize toggle
+      minimizeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (ov.dataset.state === 'expanded') {
+          ov.dataset.state = 'minimized';
+          minimizeBtn.textContent = '▴';
+          minimizeBtn.title = 'Развернуть';
+        } else {
+          ov.dataset.state = 'expanded';
+          minimizeBtn.textContent = '─';
+          minimizeBtn.title = 'Свернуть в полоску';
+        }
+      });
+      // Click on header in minimized state → expand
+      handle.addEventListener('dblclick', () => {
+        if (ov.dataset.state === 'minimized') {
+          ov.dataset.state = 'expanded';
+          minimizeBtn.textContent = '─';
+          minimizeBtn.title = 'Свернуть в полоску';
+        }
+      });
+
+      // Dragging
+      let dragState = null;
+      handle.addEventListener('mousedown', (e) => {
+        // Don't start drag from the icon-buttons
+        if (e.target.closest('.rec-icon-btn')) return;
+        e.preventDefault();
+        const rect = ov.getBoundingClientRect();
+        // Switch from bottom/right positioning to top/left for free movement
+        ov.style.bottom = 'auto';
+        ov.style.right = 'auto';
+        ov.style.left = rect.left + 'px';
+        ov.style.top = rect.top + 'px';
+        dragState = {
+          startX: e.clientX,
+          startY: e.clientY,
+          origLeft: rect.left,
+          origTop: rect.top,
+          moved: false,
+        };
+        ov.classList.add('dragging');
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!dragState) return;
+        const dx = e.clientX - dragState.startX;
+        const dy = e.clientY - dragState.startY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) dragState.moved = true;
+        // Ограничиваем перемещение границами окна
+        const w = ov.offsetWidth, h = ov.offsetHeight;
+        const maxX = window.innerWidth - w;
+        const maxY = window.innerHeight - h;
+        const newLeft = Math.max(8, Math.min(maxX - 8, dragState.origLeft + dx));
+        const newTop = Math.max(8, Math.min(maxY - 8, dragState.origTop + dy));
+        ov.style.left = newLeft + 'px';
+        ov.style.top = newTop + 'px';
+      });
+      document.addEventListener('mouseup', (e) => {
+        if (!dragState) return;
+        ov.classList.remove('dragging');
+        // Snap к ближайшему краю, если близко (< 80px)
+        if (dragState.moved) {
+          snapRecToEdge(ov);
+        }
+        dragState = null;
+      });
+      // Touch support
+      handle.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.rec-icon-btn')) return;
+        const t = e.touches[0];
+        const rect = ov.getBoundingClientRect();
+        ov.style.bottom = 'auto';
+        ov.style.right = 'auto';
+        ov.style.left = rect.left + 'px';
+        ov.style.top = rect.top + 'px';
+        dragState = {
+          startX: t.clientX, startY: t.clientY,
+          origLeft: rect.left, origTop: rect.top,
+          moved: false, touch: true,
+        };
+        ov.classList.add('dragging');
+      }, { passive: true });
+      document.addEventListener('touchmove', (e) => {
+        if (!dragState || !dragState.touch) return;
+        const t = e.touches[0];
+        const dx = t.clientX - dragState.startX;
+        const dy = t.clientY - dragState.startY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) dragState.moved = true;
+        const w = ov.offsetWidth, h = ov.offsetHeight;
+        const maxX = window.innerWidth - w;
+        const maxY = window.innerHeight - h;
+        ov.style.left = Math.max(8, Math.min(maxX - 8, dragState.origLeft + dx)) + 'px';
+        ov.style.top = Math.max(8, Math.min(maxY - 8, dragState.origTop + dy)) + 'px';
+      }, { passive: true });
+      document.addEventListener('touchend', () => {
+        if (!dragState) return;
+        ov.classList.remove('dragging');
+        if (dragState.moved) snapRecToEdge(ov);
+        dragState = null;
+      });
+
+      function snapRecToEdge(el) {
+        const rect = el.getBoundingClientRect();
+        const margin = 12;
+        const distLeft = rect.left;
+        const distRight = window.innerWidth - rect.right;
+        const distTop = rect.top;
+        const distBottom = window.innerHeight - rect.bottom;
+        const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+        el.style.transition = 'left 0.2s ease, top 0.2s ease';
+        if (minDist === distLeft && distLeft < 80) {
+          el.style.left = margin + 'px';
+        } else if (minDist === distRight && distRight < 80) {
+          el.style.left = (window.innerWidth - rect.width - margin) + 'px';
+        } else if (minDist === distTop && distTop < 80) {
+          el.style.top = margin + 'px';
+        } else if (minDist === distBottom && distBottom < 80) {
+          el.style.top = (window.innerHeight - rect.height - margin) + 'px';
+        }
+        setTimeout(() => { el.style.transition = ''; }, 220);
+      }
+    })();
 
     function updateRecBtn() {
       const b = $('recordBtn');

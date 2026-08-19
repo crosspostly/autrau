@@ -33,7 +33,7 @@ DEFAULTS: dict[str, Any] = {
     "voice_memo_cleanup_after_days": 7, # 0 = keep forever; N>0 = auto-delete older than N days
 
     # v1.5: Auto-translation
-    "translate_to_en": False,           # OFF by default — needs working provider
+    "translate_to_en": True,            # ON by default — Argos Translate (локально) работает из коробки
     "translation_provider": "argos",    # Argos (local) preferred over dead public instances
     "translation_fallback": "libretranslate",  # last resort
     "libretranslate_url": "",           # empty = use public instance
