@@ -982,7 +982,7 @@
 
     <!-- Автоперевод на английский (внутри шестерёнки, последний пункт) -->
     <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
-      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--text);"><span class="num">3.5</span> 🌐 Перевод на английский</h3>
+      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--text);">🌐 Перевод на английский</h3>
       <div class="row">
         <div style="flex: 1 1 100%;">
           <label for="translateToEn">Автоперевод расшифровок на английский</label>
@@ -1709,9 +1709,10 @@
               $('micIcon').className = 'mic-icon done';
               $('wfProgress').style.width = '100%';
               const text = m.payload.text || acc;
-              const translation = m.payload.translation || '';
-              showResultInCard(text, translation);
-              $('transcriptionTitle').textContent = '✨ Результат';
+              // Для ФАЙЛОВ: карточка показывает только оригинал (translation
+              // сохраняется в .en.txt отдельно, но в UI не выводим — иначе
+              // засирает экран английским поверх русского).
+              showResultInCard(text, '', '✨ Результат');
               $('transcriptionCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
               const e = ((Date.now() - start) / 1000).toFixed(1);
               $('stats').textContent = `${text.length.toLocaleString('ru')} символов · ${e} с`;
@@ -2388,6 +2389,11 @@
     $('recCancel').addEventListener('click', () => stopRecording({ cancel: true }));
 
     // ===== Result card: tabs (EN first) + Handy-style insertAtCursor =====
+    // Для ГОЛОСОВЫХ: showResultInCard(text, translation, '🎙 Голосовая заметка')
+    //   → показываем 2 вкладки (RU + EN) с переводом.
+    // Для ФАЙЛОВ: showResultInCard(text, '', '✨ Результат')
+    //   → показываем только оригинал на языке источника (RU/EN/другой),
+    //     перевод сохраняется в .en.txt но в карточку не выводим.
     function showResultInCard(text, translation, title) {
       const card = $('transcriptionCard');
       const live = $('liveText');
@@ -2404,16 +2410,16 @@
       // Update title
       if (title) $('transcriptionTitle').textContent = title;
 
-      // Show EN tab (default) + RU tab if translation available
+      // Determine if we show both tabs (voice memo) or just the source text (file)
       const hasTranslation = !!translation && translation.trim().length > 0;
       resRu.value = text;  // RU = original
-      resEn.value = hasTranslation ? translation : text;  // EN = translation, fallback to original
-      // Tabs visibility
-      tabs.classList.remove('hidden');
-      // Activate EN tab by default
+      resEn.value = hasTranslation ? translation : text;  // EN = translation OR original
       const tabEn = tabs.querySelector('[data-tab="en"]');
       const tabRu = tabs.querySelector('[data-tab="ru"]');
       if (hasTranslation) {
+        // Voice memo: оба таба, EN активна
+        tabs.classList.remove('hidden');
+        tabEn.classList.remove('hidden');
         tabRu.classList.remove('hidden');
         tabEn.classList.add('active');
         tabRu.classList.remove('active');
@@ -2421,12 +2427,13 @@
         resRu.classList.add('hidden');
         badge.textContent = 'Argos · ' + (text.length || 0) + ' → ' + (translation.length || 0) + ' символов';
       } else {
-        // Нет перевода — показываем только RU, табы скрываем
+        // Файл: только оригинал, табы скрыты
+        tabs.classList.add('hidden');
+        tabEn.classList.add('hidden');
         tabRu.classList.add('hidden');
-        tabEn.classList.add('active');
         resEn.classList.remove('hidden');
         resRu.classList.add('hidden');
-        badge.textContent = 'перевод недоступен';
+        badge.textContent = 'оригинал (язык источника)';
       }
       actions.classList.remove('hidden');
       card.classList.remove('hidden');
