@@ -62,6 +62,7 @@ import tools.check as check  # noqa: E402
 import tools.update as upd  # noqa: E402
 import tools.cleanup as clean  # noqa: E402
 import tools.favorites as fav  # noqa: E402
+import tools.translation as tr  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -432,6 +433,88 @@ async def api_voice_memos_open_folder() -> dict:
     return {"ok": True, "dir": str(d)}
 
 
+# ---- Translation (v1.5) ----
+async def _maybe_translate(text: str, info: dict, target_path=None) -> Optional[Path]:
+    """Если cfg.translate_to_en и язык != en — переводит и сохраняет *.en.txt.
+    Возвращает путь к переведённому файлу, или None.
+    Логирует ошибки, но НЕ падает (оригинал уже сохранён).
+    """
+    if not text or not text.strip():
+        return None
+    if not cfg.get("translate_to_en", False):
+        return None
+    src_lang = (info.get("language") or "").lower()
+    if src_lang in ("en", "en-us", "en-gb", "english", "auto", ""):
+        # Нечего переводить — текст уже английский или не знаем
+        if src_lang == "":
+            log.info("translate_to_en: пропускаю (неизвестный язык)")
+        return None
+    try:
+        translated, used = tr.translate(
+            text, target="en",
+            provider_name=cfg.get("translation_provider", "minimax"),
+            fallback_provider=cfg.get("translation_fallback", "libretranslate"),
+            libretranslate_url=cfg.get("libretranslate_url", ""),
+            libretranslate_key=cfg.get("libretranslate_key", ""),
+            minimax_key=cfg.get("minimax_key", ""),
+        )
+        info2 = dict(info)
+        info2["translation_provider"] = used
+        info2["target_language"] = "en"
+        if target_path is None:
+            # Voice memos / прочее без явного файла — пропускаем перевод
+            return None
+        return clean.save_translated(target_path, translated, info2)
+    except Exception as e:
+        log.warning("translate_to_en failed: %s (оригинал сохранён)", e)
+        return None
+
+
+@app.post("/api/translate")
+async def api_translate(payload: dict) -> dict:
+    """Перевести произвольный текст. Body: {text, target?, source?, provider?, fallback?}.
+    Использует config если поля не указаны.
+    """
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "text обязателен")
+    target = (payload.get("target") or "en").strip()
+    source = (payload.get("source") or "auto").strip()
+    try:
+        translated, used = tr.translate(
+            text, target=target, source=source,
+            provider_name=payload.get("provider") or cfg.get("translation_provider", "minimax"),
+            fallback_provider=payload.get("fallback") or cfg.get("translation_fallback", "libretranslate"),
+            libretranslate_url=payload.get("libretranslate_url", cfg.get("libretranslate_url", "")),
+            libretranslate_key=payload.get("libretranslate_key", cfg.get("libretranslate_key", "")),
+            minimax_key=payload.get("minimax_key", cfg.get("minimax_key", "")),
+        )
+        return {"translated": translated, "provider": used, "target": target}
+    except Exception as e:
+        raise HTTPException(502, f"Ошибка перевода: {e}")
+
+
+@app.get("/api/translate/providers")
+async def api_translate_providers() -> dict:
+    """Какие провайдеры перевода доступны прямо сейчас."""
+    out = []
+    for name in ("minimax", "libretranslate"):
+        prov = tr.get_provider(
+            name,
+            libretranslate_url=cfg.get("libretranslate_url", ""),
+            libretranslate_key=cfg.get("libretranslate_key", ""),
+            minimax_key=cfg.get("minimax_key", ""),
+        )
+        if prov is None:
+            out.append({"name": name, "available": False,
+                        "reason": "MiniMax key не найден" if name == "minimax"
+                                  else "не сконфигурирован"})
+        else:
+            avail, why = prov.is_available()
+            out.append({"name": name, "available": avail, "reason": why})
+    return {"providers": out, "translate_to_en": cfg.get("translate_to_en", False)}
+
+
 # ---- Voice recording session (v1.5) ----
 _voice_sessions: dict[str, dict] = {}  # id -> {started_at, chunks: [bytes]}
 _voice_lock = threading.Lock()
@@ -519,6 +602,8 @@ async def api_voice_stop(payload: dict) -> dict:
         info.setdefault("provider", p_name)
         info.setdefault("model", m_name)
         path = clean.save_voice_memo(text, info)
+        if path:
+            await _maybe_translate(text, info, target_path=path)
         log.info("Voice memo saved: %s (chunks=%d)", path.name, len(chunks))
         return {
             "id": sid,
@@ -826,7 +911,9 @@ async def transcribe(
                 _info = out.get("info", {}) or {}
                 _info.setdefault("provider", p_name)
                 _info.setdefault("model", m_name)
-                clean.save_transcript(file.filename, out.get("text", ""), _info)
+                _path = clean.save_transcript(file.filename, out.get("text", ""), _info)
+                if _path:
+                    await _maybe_translate(out.get("text", ""), _info, target_path=_path)
             except Exception as se:
                 log.warning("Не удалось сохранить расшифровку: %s", se)
             _enqueue("done", 100, out)

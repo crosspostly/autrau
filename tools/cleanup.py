@@ -70,6 +70,33 @@ def save_transcript(original_name: Optional[str], text: str, info: dict) -> Path
     return path
 
 
+def save_translated(original_transcript: Path, translated_text: str, info: dict) -> Optional[Path]:
+    """Сохраняет переведённую версию рядом с оригиналом.
+
+    original_transcript: путь к *.txt (например data/transcripts/2026-08-19_voice-123.mp3.txt)
+    → результат: <stem>.en.txt рядом (например 2026-08-19_voice-123.mp3.en.txt)
+    """
+    if not translated_text or not translated_text.strip():
+        return None
+    target = original_transcript.with_name(original_transcript.stem + ".en.txt")
+    n = 1
+    while target.exists():
+        target = original_transcript.with_name(f"{original_transcript.stem}.{n}.en.txt")
+        n += 1
+    header = [
+        f"# Translation of: {original_transcript.name}",
+        f"# Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"# Provider: {info.get('translation_provider', '?')}",
+        f"# Original language: {info.get('language', '?')}",
+        f"# Target language: {info.get('target_language', 'en')}",
+        "",
+    ]
+    target.write_text("\n".join(header) + (translated_text or "").strip() + "\n",
+                       encoding="utf-8")
+    log.info("Saved translation: %s", target.name)
+    return target
+
+
 def save_voice_memo(text: str, info: dict) -> Path:
     """Сохраняет голосовую заметку в data/voice-memos/.
 
