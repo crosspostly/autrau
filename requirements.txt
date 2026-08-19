@@ -17,3 +17,8 @@ faster-whisper>=1.0,<2.0
 # Parakeet v3 (NVIDIA GPU + CUDA, SOTA 2025-2026):
 #     pip install -U nemo_toolkit[asr]
 # Note: nemo_toolkit pulls in torch (~2-3 GB) and has strict CUDA requirements.
+
+# v1.5: Translation (optional, installed on demand via /api/translate/install-argos)
+# argostranslate — local EN<->RU model (~336 MB total), 100+ language pairs available
+# langdetect — auto-detect source language (used by argos provider)
+# Both are installed automatically when the user clicks "📥 Install Argos" in the UI.

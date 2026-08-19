@@ -101,6 +101,8 @@ async def lifespan(app: FastAPI):
         log.info("Startup update check (background) …")
         asyncio.create_task(_startup_check())
     asyncio.create_task(_cleanup_loop())
+    # v1.5: проверка translation providers (с таймаутом, чтобы не зависнуть)
+    asyncio.create_task(_translation_startup_check())
     yield
     # Shutdown: nothing to clean up — provider instances hold their own resources.
 
@@ -112,6 +114,56 @@ async def _startup_check() -> None:
             log.warning("App update available. Run update.bat or call /api/updates/app")
     except Exception as e:
         log.warning("Startup check failed: %s", e)
+
+
+async def _translation_startup_check() -> None:
+    """Проверяет доступность translation providers при старте (с таймаутом)."""
+    import asyncio as _aio
+    log.info("Translation providers check (с таймаутом 5с на провайдера) …")
+    log.info("─" * 50)
+    for name in ("minimax", "libretranslate", "argos"):
+        try:
+            prov = tr.get_provider(
+                name,
+                libretranslate_url=cfg.get("libretranslate_url", ""),
+                libretranslate_key=cfg.get("libretranslate_key", ""),
+                minimax_key=cfg.get("minimax_key", ""),
+            )
+            if prov is None:
+                log.info(f"  ✗ {name:14}  не сконфигурирован")
+                continue
+            # Проверяем в отдельном потоке с таймаутом (is_available может зависнуть)
+            avail_result = [None, None]
+            def _check():
+                try:
+                    avail, why = prov.is_available()
+                    avail_result[0] = avail
+                    avail_result[1] = why
+                except Exception as e:
+                    avail_result[0] = False
+                    avail_result[1] = f"exception: {e}"
+            t = threading.Thread(target=_check, daemon=True)
+            t.start()
+            # Ждём до 5 секунд через asyncio.sleep
+            for _ in range(50):
+                if not t.is_alive():
+                    break
+                await _aio.sleep(0.1)
+            if t.is_alive():
+                log.info(f"  ⏱ {name:14}  таймаут 5с (is_available завис)")
+            else:
+                avail, why = avail_result
+                if avail:
+                    log.info(f"  ✓ {name:14}  OK")
+                else:
+                    log.info(f"  ✗ {name:14}  {why or 'недоступен'}")
+        except Exception as e:
+            log.info(f"  ✗ {name:14}  {e}")
+    log.info("─" * 50)
+    if cfg.get("translate_to_en"):
+        log.info("translate_to_en = ON — перевод будет пытаться работать")
+    else:
+        log.info("translate_to_en = OFF — перевод выключен (поставь галочку в UI для включения)")
 
 
 _CLEANUP_INTERVAL_S = 6 * 3600  # run age-based cleanup every 6 hours
@@ -480,10 +532,9 @@ async def api_translate(payload: dict) -> dict:
     if not text:
         raise HTTPException(400, "text обязателен")
     target = (payload.get("target") or "en").strip()
-    source = (payload.get("source") or "auto").strip()
     try:
         translated, used = tr.translate(
-            text, target=target, source=source,
+            text, target=target,
             provider_name=payload.get("provider") or cfg.get("translation_provider", "minimax"),
             fallback_provider=payload.get("fallback") or cfg.get("translation_fallback", "libretranslate"),
             libretranslate_url=payload.get("libretranslate_url", cfg.get("libretranslate_url", "")),
@@ -497,9 +548,10 @@ async def api_translate(payload: dict) -> dict:
 
 @app.get("/api/translate/providers")
 async def api_translate_providers() -> dict:
-    """Какие провайдеры перевода доступны прямо сейчас."""
+    """Какие провайдеры перевода доступны прямо сейчас (с таймаутом для Argos)."""
+    import asyncio as _aio
     out = []
-    for name in ("minimax", "libretranslate"):
+    for name in ("minimax", "libretranslate", "argos"):
         prov = tr.get_provider(
             name,
             libretranslate_url=cfg.get("libretranslate_url", ""),
@@ -510,10 +562,136 @@ async def api_translate_providers() -> dict:
             out.append({"name": name, "available": False,
                         "reason": "MiniMax key не найден" if name == "minimax"
                                   else "не сконфигурирован"})
+            continue
+        # Проверяем с таймаутом (argos is_available может зависнуть)
+        avail_result = [None, None]
+        def _check():
+            try:
+                a, w = prov.is_available()
+                avail_result[0], avail_result[1] = a, w
+            except Exception as e:
+                avail_result[0], avail_result[1] = False, f"exception: {e}"
+        t = threading.Thread(target=_check, daemon=True)
+        t.start()
+        for _ in range(50):
+            if not t.is_alive():
+                break
+            await _aio.sleep(0.1)
+        if t.is_alive():
+            out.append({"name": name, "available": False,
+                        "reason": f"is_available() завис (таймаут 5с). "
+                                   f"Скорее всего повреждена установка {name}."})
         else:
-            avail, why = prov.is_available()
-            out.append({"name": name, "available": avail, "reason": why})
+            out.append({"name": name, "available": avail_result[0],
+                        "reason": avail_result[1] or ""})
     return {"providers": out, "translate_to_en": cfg.get("translate_to_en", False)}
+
+
+@app.post("/api/translate/install-argos")
+async def api_translate_install_argos() -> dict:
+    """Устанавливает argostranslate через pip + обе модели en_ru + ru_en.
+
+    Шаги:
+      1. pip install argostranslate (если ещё нет)
+      2. update_package_index() — обновить индекс моделей с GitHub
+      3. установить translate-en_ru (187 МБ) и translate-ru_en (149 МБ) в фоне
+
+    Возвращает сразу {started: true, status: "installing"}, установка идёт
+    в фоне. Опрос статуса через /api/translate/providers.
+    """
+    import asyncio as _aio
+    import subprocess as _sp
+
+    # Шаг 1: pip install (argostranslate + langdetect)
+    missing_pkgs = []
+    try:
+        import argostranslate  # noqa: F401
+    except ImportError:
+        missing_pkgs.append("argostranslate")
+    try:
+        import langdetect  # noqa: F401
+    except ImportError:
+        missing_pkgs.append("langdetect")
+    if missing_pkgs:
+        log.info("Установка пакетов: %s …", ", ".join(missing_pkgs))
+        try:
+            proc = await _aio.create_subprocess_exec(
+                sys.executable, "-m", "pip", "install", "--quiet", *missing_pkgs,
+                stdout=_sp.PIPE, stderr=_sp.PIPE,
+            )
+            try:
+                _, stderr = await _aio.wait_for(proc.communicate(), timeout=240)
+            except _aio.TimeoutError:
+                proc.kill()
+                return {"ok": False, "error": f"pip install занял >240с (таймаут). pkgs={missing_pkgs}"}
+            if proc.returncode != 0:
+                err = stderr.decode("utf-8", "replace")[-500:]
+                return {"ok": False, "error": f"pip exit {proc.returncode}: {err}"}
+        except Exception as e:
+            return {"ok": False, "error": f"pip install: {e}"}
+        log.info("Установлены: %s", ", ".join(missing_pkgs))
+
+    # Шаг 2: проверяем какие модели уже стоят
+    def _scan_models():
+        try:
+            from argostranslate import package as _pkg
+            _pkg.update_package_index()
+            installed = {(p.from_code, p.to_code): p for p in _pkg.get_installed_packages()}
+            available = {(p.from_code, p.to_code): p for p in _pkg.get_available_packages()}
+            return installed, available, None
+        except Exception as e:
+            return None, None, str(e)
+    scan = [None]
+    def _do_scan():
+        scan[0] = _scan_models()
+    ts = threading.Thread(target=_do_scan, daemon=True)
+    ts.start()
+    for _ in range(50):
+        if not ts.is_alive():
+            break
+        await _aio.sleep(0.1)
+    if ts.is_alive():
+        return {"ok": False, "error": "Не удалось просканировать модели (таймаут 5с)"}
+    installed, available, err = scan[0]
+    if err:
+        return {"ok": False, "error": f"Сканирование моделей: {err}"}
+
+    # Шаг 3: качаем недостающие модели в фоне
+    to_install = []
+    for pair in (("en", "ru"), ("ru", "en")):
+        if pair in installed:
+            continue
+        if pair not in available:
+            return {"ok": False, "error": f"Пара {pair[0]}→{pair[1]} отсутствует в индексе пакетов"}
+        to_install.append(available[pair])
+
+    if not to_install:
+        return {
+            "ok": True,
+            "already_installed": True,
+            "models": [f"{a}→{b}" for (a, b) in installed.keys()],
+            "note": "Все языковые пары уже установлены",
+        }
+
+    def _bg_install(packages):
+        from argostranslate import package as _pkg
+        for pkg in packages:
+            try:
+                log.info("Argos: устанавливаю модель %s→%s (%s) …", pkg.from_code, pkg.to_code, pkg.code)
+                pkg.install()
+                log.info("Argos: модель %s→%s установлена", pkg.from_code, pkg.to_code)
+            except Exception as e:
+                log.error("Argos: ошибка установки %s→%s: %s", pkg.from_code, pkg.to_code, e)
+    threading.Thread(target=_bg_install, args=(to_install,), daemon=True).start()
+
+    return {
+        "ok": True,
+        "started": True,
+        "installing": [p.code for p in to_install],
+        "already_installed": [f"{a}→{b}" for (a, b) in installed.keys()],
+        "note": f"Качаю {len(to_install)} модель(и) в фоне (~{sum(187 if p.code == 'translate-en_ru' else 149 for p in to_install)} МБ). " +
+                "Следи за /api/translate/providers — когда провайдер станет OK, всё готово.",
+    }
 
 
 # ---- Voice recording session (v1.5) ----

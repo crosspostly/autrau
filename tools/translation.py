@@ -57,8 +57,9 @@ class ArgosTranslateProvider(TranslationProvider):
     """Локальный перевод через argostranslate (тот же движок, что в LibreTranslate).
 
     ~280 МБ на языковую пару en↔ru, 0.5-1.5 сек на короткий текст, чисто CPU.
-    Установка: pip install argostranslate, потом argospm install translate-en_ru
-    или программно: from argospm import install_package; install_package('translate-en_ru').
+    Установка:
+      - pip install argostranslate
+      - пакетная модель: en→ru и ru→en (~336 МБ суммарно, скачивается в фоне)
     """
     name = "argos"
 
@@ -70,14 +71,27 @@ class ArgosTranslateProvider(TranslationProvider):
         self._loaded_pair = None
 
     def is_available(self) -> tuple[bool, str]:
-        # Только лёгкая проверка пакета (не загружаем модели, иначе import зависает)
+        """Только лёгкая проверка: пакет импортируется + модели en_ru / ru_en стоят.
+
+        Не загружаем модели в память (это занимает 5-15 сек).
+        """
         try:
             import argostranslate  # noqa: F401
         except ImportError as e:
             return False, f"pip install argostranslate ({e})"
-        # Не проверяем наличие модели здесь (это занимает время + грузит модели).
-        # Реальная проверка будет в translate() — если модели нет, упадём с понятной ошибкой.
-        return True, ""
+        # Проверяем что модели en_ru + ru_en скачаны (без загрузки в RAM)
+        try:
+            from argostranslate import package as _pkg
+            installed = {p.from_code + "_" + p.to_code for p in _pkg.get_installed_packages()}
+        except Exception as e:
+            return True, f"пакет OK, но не удалось прочитать список моделей: {e}"
+        missing = []
+        for pair in ("en_ru", "ru_en"):
+            if pair not in installed:
+                missing.append(pair)
+        if missing:
+            return True, f"пакет OK, модели отсутствуют: {','.join(missing)} (вызови /api/translate/install-argos)"
+        return True, "en_ru+ru_en модели установлены"
 
     def _ensure_translator(self):
         # Проверяем модели в отдельном потоке с таймаутом, чтобы не зависнуть
@@ -118,22 +132,28 @@ class ArgosTranslateProvider(TranslationProvider):
     def translate(self, text: str, source: str = "auto", target: str = "en") -> str:
         if not text or not text.strip():
             return text
-        # Argos жёстко привязан к паре (from, to), игнорируем source/target от API
-        # Для авто-определения используем langdetect
+        # Argos жёстко привязан к паре (from, to), игнорируем source/target от API.
+        # Для авто-определения: langdetect (если есть), иначе эвристика по Cyrillic.
         from_code = self._from
         to_code = self._to
         if source == "auto" and not text.strip().isascii():
-            # Try detect (опционально, может отсутствовать)
+            detected = None
             try:
                 from langdetect import detect
                 d = detect(text)
                 if d in ("ru", "en"):
-                    from_code = d
-                    to_code = "en" if d == "ru" else "ru"
+                    detected = d
             except Exception:
                 pass
+            if detected is None:
+                # Fallback: эвристика — есть кириллица → ru
+                if any("\u0400" <= ch <= "\u04FF" for ch in text):
+                    detected = "ru"
+                else:
+                    detected = "en"
+            from_code = detected
+            to_code = "en" if detected == "ru" else "ru"
         if (from_code, to_code) != (self._from, self._to):
-            # Создаём новый инстанс для этой пары
             p = ArgosTranslateProvider(from_code=from_code, to_code=to_code)
             p._installed_langs = self._installed_langs
             p._ensure_translator()

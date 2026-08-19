@@ -630,6 +630,11 @@
     <section class="hero">
       <h1>Превращаем аудио в текст<br>прямо на вашем ПК</h1>
       <p>Без облака, без интернета, без лимитов. Два движка на выбор — <span class="accent">Whisper.cpp</span> (tiny / large-v3) или <span class="accent">Parakeet v3</span> ONNX/DirectML (SOTA 2025–2026, 25 языков). Запись голосом по горячей клавише, очередь файлов, избранное. Полный контроль и обновления из GitHub.</p>
+      <div id="heroBadges" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; font-size:12px;">
+        <span class="badge" id="badgeArgos" style="padding:4px 10px; border-radius:14px; background:rgba(0,0,0,0.35); color:var(--text-dim);">🌐 Argos: проверяю…</span>
+        <span class="badge" id="badgeLibre" style="padding:4px 10px; border-radius:14px; background:rgba(0,0,0,0.35); color:var(--text-dim);">🌍 LibreTranslate: проверяю…</span>
+        <span class="badge" id="badgeTranslateOn" style="padding:4px 10px; border-radius:14px; background:rgba(0,0,0,0.35); color:var(--text-dim);">🔁 Автоперевод: проверяю…</span>
+      </div>
     </section>
 
     <!-- Provider & model selection -->
@@ -843,11 +848,10 @@
         </div>
       </div>
     </div>
-    </div><!-- /settingsBody -->
 
-    <!-- Автоперевод на английский (отдельная карточка — всегда видна) -->
-    <div class="card">
-      <h2><span class="num">3.5</span> 🌐 Перевод на английский</h2>
+    <!-- Автоперевод на английский (внутри шестерёнки, последний пункт) -->
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+      <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--text);"><span class="num">3.5</span> 🌐 Перевод на английский</h3>
       <div class="row">
         <div style="flex: 1 1 100%;">
           <label for="translateToEn">Автоперевод расшифровок на английский</label>
@@ -860,6 +864,7 @@
             </select>
             <button class="secondary" id="saveTranslate">💾 Сохранить</button>
             <button class="secondary" id="testTranslate" title="Проверить, что выбранный провайдер реально работает">🧪 Тест</button>
+            <button class="secondary" id="installArgos" title="Установить argostranslate (pip install). Нужно для Argos.">📥 Установить Argos</button>
           </div>
           <div class="small" style="margin-top:8px; opacity:.75;">
             Если включено — после каждой расшифровки создаётся <code>&lt;имя&gt;.en.txt</code> рядом.
@@ -881,6 +886,8 @@
         </div>
       </details>
     </div>
+    </div><!-- /settingsBody -->
+    </div><!-- /settings card -->
 
     <!-- Transcripts -->
     <div class="card">
@@ -2214,6 +2221,40 @@
           return '✗ ' + p.name + (p.reason ? ' (' + p.reason.slice(0, 50) + ')' : '');
         });
         st.innerHTML = lines.join(' · ') + (j.translate_to_en ? ' · <b>включён</b>' : ' · выключен');
+        // Hero badges: видно сразу, без открытия шестерёнки
+        const byName = Object.fromEntries((j.providers || []).map(p => [p.name, p]));
+        function setBadge(id, ok, label) {
+          const el = $(id);
+          if (!el) return;
+          if (ok === true) {
+            el.textContent = '✓ ' + label;
+            el.style.color = 'var(--accent-2)';
+            el.style.background = 'rgba(50, 180, 100, 0.15)';
+          } else if (ok === false) {
+            el.textContent = '✗ ' + label;
+            el.style.color = 'var(--text-muted)';
+            el.style.background = 'rgba(0,0,0,0.35)';
+          } else {
+            el.textContent = label + ': …';
+          }
+        }
+        const argos = byName.argos;
+        const libre = byName.libretranslate;
+        setBadge('badgeArgos', argos ? argos.available : null, '🌐 Argos');
+        setBadge('badgeLibre', libre ? libre.available : null, '🌍 LibreTranslate');
+        const trOn = j.translate_to_en;
+        const trEl = $('badgeTranslateOn');
+        if (trEl) {
+          if (trOn) {
+            trEl.textContent = '🔁 Автоперевод: ВКЛ';
+            trEl.style.color = 'var(--accent-2)';
+            trEl.style.background = 'rgba(50, 180, 100, 0.15)';
+          } else {
+            trEl.textContent = '🔁 Автоперевод: выкл';
+            trEl.style.color = 'var(--text-dim)';
+            trEl.style.background = 'rgba(0,0,0,0.35)';
+          }
+        }
       } catch (e) {
         st.textContent = '⚠️ ' + e.message;
       }
@@ -2266,6 +2307,30 @@
         st.innerHTML = `✅ <b>${j.provider}</b>: "${j.translated}"`;
       } catch (e) {
         st.innerHTML = '❌ ' + e.message;
+      }
+    });
+
+    // Install Argos Translate
+    $('installArgos').addEventListener('click', async () => {
+      if (!confirm('Установить argostranslate (~50 МБ) через pip? После установки нужно перезапустить сервер.')) return;
+      const st = $('translateStatus');
+      st.textContent = 'ставлю argostranslate… (может занять 1-2 мин)';
+      const btn = $('installArgos');
+      btn.disabled = true;
+      try {
+        const r = await fetch(API + '/api/translate/install-argos', { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        if (j.import_works) {
+          st.innerHTML = '✅ Установлено. Перезапустите сервер: <code>./start.bat</code> → потом выберите Argos → 🧪 Тест.';
+        } else {
+          st.innerHTML = '⚠️ Установлено, но ' + (j.import_error || 'import завис') + '. ' +
+            (j.install_command || 'Попробуйте pip install --force-reinstall argostranslate');
+        }
+      } catch (e) {
+        st.innerHTML = '❌ ' + e.message;
+      } finally {
+        btn.disabled = false;
       }
     });
 
