@@ -123,8 +123,9 @@ echo ==========================================================
 echo.
 
 REM Open browser after short delay
-start "" /b cmd /c "timeout /t 3 /nobreak >nul & start http://%AUTRAU_HOST%:%AUTRAU_PORT%/"
+start "" /b cmd /c "timeout /t 3 /nobreak >nul & start http://%AUTRAU_HOST%:%AUTRAU_PORT%/" 2>nul
 
+REM Сервер пишет логи одновременно в консоль (здесь) и в autrau-server.out.log
 "%VENV_PY%" server.py
 
 :END

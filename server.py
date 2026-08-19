@@ -65,8 +65,22 @@ import tools.favorites as fav  # noqa: E402
 import tools.translation as tr  # noqa: E402
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    force=True,  # перезаписать дефолтный uvicorn-хендлер, чтобы все наши логи шли в stdout
 )
+# Дублируем app-логи в файл autrau-server.out.log (чтобы можно было посмотреть после)
+try:
+    _file_handler = logging.FileHandler(
+        PROJECT_ROOT / "autrau-server.out.log", encoding="utf-8", mode="a"
+    )
+    _file_handler.setLevel(logging.INFO)
+    _file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+    logging.getLogger("autrau").addHandler(_file_handler)
+except Exception:
+    pass
+# uvicorn access-логи не дублируем
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 log = logging.getLogger("autrau.server")
 
 HOST = os.environ.get("AUTRAU_HOST", "127.0.0.1")
@@ -117,10 +131,14 @@ async def _startup_check() -> None:
 
 
 async def _translation_startup_check() -> None:
-    """Проверяет доступность translation providers при старте (с таймаутом)."""
+    """Проверяет доступность translation providers при старте (с таймаутом).
+    Если argos не установлен или моделей нет — автоматически запускает установку в фоне.
+    """
     import asyncio as _aio
-    log.info("Translation providers check (с таймаутом 5с на провайдера) …")
-    log.info("─" * 50)
+    log.info("─" * 60)
+    log.info("🌐 TRANSLATION PROVIDERS")
+    log.info("─" * 60)
+    needs_argos_install = False
     for name in ("minimax", "libretranslate", "argos"):
         try:
             prov = tr.get_provider(
@@ -130,7 +148,10 @@ async def _translation_startup_check() -> None:
                 minimax_key=cfg.get("minimax_key", ""),
             )
             if prov is None:
-                log.info(f"  ✗ {name:14}  не сконфигурирован")
+                if name == "minimax":
+                    log.info(f"  ✗ {name:14}  не задан api_key (положите в ~/.minimax/auth.json или config)")
+                else:
+                    log.info(f"  ✗ {name:14}  не сконфигурирован")
                 continue
             # Проверяем в отдельном потоке с таймаутом (is_available может зависнуть)
             avail_result = [None, None]
@@ -157,13 +178,72 @@ async def _translation_startup_check() -> None:
                     log.info(f"  ✓ {name:14}  OK")
                 else:
                     log.info(f"  ✗ {name:14}  {why or 'недоступен'}")
+                    # Если argos не работает (нет пакета или нет моделей) — поставим автоматически
+                    if name == "argos" and (
+                        "pip install" in (why or "")
+                        or "модели отсутствуют" in (why or "")
+                    ):
+                        needs_argos_install = True
         except Exception as e:
             log.info(f"  ✗ {name:14}  {e}")
-    log.info("─" * 50)
+    log.info("─" * 60)
     if cfg.get("translate_to_en"):
         log.info("translate_to_en = ON — перевод будет пытаться работать")
     else:
         log.info("translate_to_en = OFF — перевод выключен (поставь галочку в UI для включения)")
+
+    # Авто-установка Argos в фоне, если он не работает
+    if needs_argos_install:
+        log.info("🔧 Argos не работает → авто-установка в фоне (pip + модели, ~336 МБ)")
+        log.info("   Следи за /api/translate/providers — когда станет OK, всё готово")
+        threading.Thread(target=_bg_install_argos, daemon=True).start()
+
+
+def _bg_install_argos() -> None:
+    """Фоновая авто-установка Argos при старте: pip + обе модели en↔ru."""
+    import subprocess as _sp
+    # 1. pip install (если не стоит)
+    try:
+        import argostranslate  # noqa: F401
+        log.info("  argostranslate: уже установлен")
+    except ImportError:
+        log.info("  pip install argostranslate langdetect …")
+        try:
+            proc = _sp.run(
+                [sys.executable, "-m", "pip", "install", "--quiet", "argostranslate", "langdetect"],
+                capture_output=True, text=True, timeout=300,
+            )
+            if proc.returncode != 0:
+                log.error("  pip install FAILED: %s", proc.stderr[-300:])
+                return
+            log.info("  argostranslate + langdetect: установлены")
+        except Exception as e:
+            log.error("  pip install exception: %s", e)
+            return
+
+    # 2. Скачиваем модели en_ru + ru_en в фоне
+    try:
+        from argostranslate import package as _pkg
+        log.info("  Обновляю индекс пакетов …")
+        _pkg.update_package_index()
+        available = {(p.from_code, p.to_code): p for p in _pkg.get_available_packages()}
+        installed = {(p.from_code, p.to_code) for p in _pkg.get_installed_packages()}
+        for pair, label in [(("en", "ru"), "en→ru (187 МБ)"), (("ru", "en"), "ru→en (149 МБ)")]:
+            if pair in installed:
+                log.info("  модель %s: уже установлена", label)
+                continue
+            if pair not in available:
+                log.error("  модель %s: НЕТ в индексе пакетов", label)
+                continue
+            log.info("  скачиваю %s с argos-net.com …", label)
+            try:
+                available[pair].install()
+                log.info("  модель %s: ГОТОВА ✓", label)
+            except Exception as e:
+                log.error("  модель %s: ошибка скачивания: %s", label, e)
+        log.info("  Argos авто-установка: завершена")
+    except Exception as e:
+        log.error("  Argos авто-установка: %s", e)
 
 
 _CLEANUP_INTERVAL_S = 6 * 3600  # run age-based cleanup every 6 hours
@@ -1137,5 +1217,36 @@ async def transcribe(
 if __name__ == "__main__":
     import uvicorn
     log.info("Autrau starting on http://%s:%d", HOST, PORT)
+    # Предполётная проверка translation providers (СИНХРОННАЯ, чтобы появилась в логе
+    # ДО старта uvicorn и lifespan-тасков). Если argos не работает — авто-установка в фоне.
+    log.info("─" * 60)
+    log.info("🌐 TRANSLATION PROVIDERS (preflight)")
+    log.info("─" * 60)
+    try:
+        cfg.init()
+        _preflight_argos_needs_install = False
+        for name in ("minimax", "libretranslate", "argos"):
+            prov = tr.get_provider(
+                name,
+                libretranslate_url=cfg.get("libretranslate_url", ""),
+                libretranslate_key=cfg.get("libretranslate_key", ""),
+                minimax_key=cfg.get("minimax_key", ""),
+            )
+            if prov is None:
+                log.info("  ✗ %-14s  не сконфигурирован", name)
+                continue
+            a, w = prov.is_available()
+            if a:
+                log.info("  ✓ %-14s  OK", name)
+            else:
+                log.info("  ✗ %-14s  %s", name, w or "недоступен")
+                if name == "argos" and ("pip install" in (w or "") or "модели отсутствуют" in (w or "")):
+                    _preflight_argos_needs_install = True
+        if _preflight_argos_needs_install:
+            log.info("🔧 argos не работает → авто-установка в фоне (pip + модели, ~336 МБ)")
+            threading.Thread(target=_bg_install_argos, daemon=True).start()
+    except Exception as _e:
+        log.warning("preflight translation check: %s", _e)
+    log.info("─" * 60)
     log.info("Open the UI at:  http://%s:%d/", HOST, PORT)
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")

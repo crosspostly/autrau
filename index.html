@@ -874,15 +874,22 @@
         </div>
       </div>
       <details style="margin-top:12px;">
-        <summary class="small" style="cursor:pointer; user-select:none; color:var(--text-dim);">🔧 Установка Argos Translate (локальный движок, ~280 МБ)</summary>
-        <div class="small" style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.25); border-radius:8px; font-family:'JetBrains Mono',monospace; line-height:1.6;">
-          <b>Шаг 1.</b> Установить пакет:<br>
-          <code style="color:var(--accent-2);">py -3.13 -m pip install argostranslate</code><br><br>
-          <b>Шаг 2.</b> Скачать модель (один раз, ~280 МБ):<br>
-          <code style="color:var(--accent-2);">py -3.13 -m argostranslate.package install translate-ru_en</code><br>
-          <i>(займёт 1-2 минуты)</i><br><br>
-          <b>Шаг 3.</b> В UI: выбрать "Argos Translate" → 💾 Сохранить → 🧪 Тест.<br><br>
-          <i>Примечание: после установки нужно перезапустить сервер, чтобы Python увидел новый пакет.</i>
+        <summary class="small" style="cursor:pointer; user-select:none; color:var(--text-dim);">🔧 Как устанавливается Argos (для любопытных)</summary>
+        <div class="small" style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.25); border-radius:8px; line-height:1.6;">
+          <b>Полностью автоматически.</b> Кнопка «📥 Установить Argos» сверху делает всё сама:
+          <ol style="margin: 6px 0 0 18px; padding: 0;">
+            <li><code>pip install argostranslate langdetect</code> в venv сервера</li>
+            <li>Скачивает обе модели en↔ru (~336 МБ) с <code>argos-net.com</code> в фоне</li>
+          </ol>
+          <div style="margin-top:8px; opacity:.8;">
+            Следи за <b>✓ Argos</b> в badge над формой — когда загорится зелёным, перевод готов.
+            Никаких перезапусков не нужно — пакет ставится в venv где уже работает сервер.
+          </div>
+          <div style="margin-top:8px; opacity:.6; font-size:11px;">
+            <i>Если кнопка не работает (например, нет интернета), можно вручную:<br>
+            <code>py -3.13 -m pip install argostranslate langdetect</code><br>
+            <code>py -3.13 -c "from argostranslate import package; package.update_package_index(); [p.install() for p in package.get_available_packages() if p.code in ('translate-en_ru', 'translate-ru_en')]"</code></i>
+          </div>
         </div>
       </details>
     </div>
