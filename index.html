@@ -431,6 +431,31 @@
        Live stream / result
        ============================================================ */
     .stream-card { position: relative; }
+    .result-tabs {
+      display: flex;
+      gap: 4px;
+      margin: 12px 0 8px 0;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+    }
+    .result-tab {
+      background: transparent;
+      border: 0;
+      color: var(--text-dim);
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .result-tab:hover { color: var(--text); }
+    .result-tab.active {
+      color: var(--accent-2);
+      border-bottom-color: var(--accent-2);
+    }
     .live {
       background: rgba(13, 17, 23, 0.6);
       border: 1px solid var(--border);
@@ -864,10 +889,18 @@
     <div class="card stream-card hidden" id="transcriptionCard">
       <h2 id="transcriptionTitle">🎙️ Распознаётся в реальном времени</h2>
       <div class="live" id="liveText"></div>
-      <textarea id="result" class="hidden" readonly placeholder="Здесь появится текст…"></textarea>
+      <div class="result-tabs hidden" id="resultTabs">
+        <button class="result-tab active" data-tab="en" type="button">🇬🇧 EN</button>
+        <button class="result-tab" data-tab="ru" type="button">🇷🇺 RU</button>
+        <span class="spacer" style="flex:1"></span>
+        <span class="small" id="translationBadge" style="color:var(--text-muted);"></span>
+      </div>
+      <textarea id="result" class="hidden" readonly placeholder="English translation will appear here…"></textarea>
+      <textarea id="resultRu" class="hidden" readonly placeholder="Русский оригинал появится здесь…"></textarea>
       <div class="actions hidden" id="resultActions">
         <button class="secondary" id="copy">📋 Скопировать</button>
         <button class="secondary" id="download">💾 Скачать .txt</button>
+        <button class="secondary" id="insertAtCursor" title="Вставить текст в поле, где был курсор (Handy-style)">📍 Вставить в фокус</button>
         <span class="spacer"></span>
         <span class="small" id="stats"></span>
       </div>
@@ -1607,8 +1640,11 @@
       $('transcriptionCard').classList.add('hidden');
       $('liveText').textContent = '';
       $('transcriptionTitle').textContent = '🎙️ Распознаётся в реальном времени';
+      $('resultTabs').classList.add('hidden');
       $('result').classList.add('hidden');
       $('result').value = '';
+      $('resultRu').classList.add('hidden');
+      $('resultRu').value = '';
       $('resultActions').classList.add('hidden');
       $('stats').textContent = '';
       $('wfProgress').style.width = '0%';
@@ -1673,12 +1709,9 @@
               $('micIcon').className = 'mic-icon done';
               $('wfProgress').style.width = '100%';
               const text = m.payload.text || acc;
-              $('result').value = text;
+              const translation = m.payload.translation || '';
+              showResultInCard(text, translation);
               $('transcriptionTitle').textContent = '✨ Результат';
-              $('liveText').classList.add('hidden');
-              $('liveText').textContent = '';
-              $('result').classList.remove('hidden');
-              $('resultActions').classList.remove('hidden');
               $('transcriptionCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
               const e = ((Date.now() - start) / 1000).toFixed(1);
               $('stats').textContent = `${text.length.toLocaleString('ru')} символов · ${e} с`;
@@ -2334,10 +2367,12 @@
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
         showOverlay('Готово ✓', (j.text || '').slice(0, 240) + ((j.text || '').length > 240 ? '…' : ''));
+        // Показать результат в карточке (как у обычных файлов) с вкладками RU + EN
+        showResultInCard(j.text || '', j.translation || '', '🎙 Голосовая заметка');
         // Switch to voice tab and refresh
         if (state.activeTab !== 'voice') switchTab('voice');
         else loadTranscripts();
-        // Auto-hide after 6s
+        // Auto-hide overlay after 6s
         setTimeout(hideOverlay, 6000);
       } catch (err) {
         showOverlay('Ошибка', err.message);
@@ -2351,6 +2386,158 @@
     });
     $('recStop').addEventListener('click', () => stopRecording());
     $('recCancel').addEventListener('click', () => stopRecording({ cancel: true }));
+
+    // ===== Result card: tabs (EN first) + Handy-style insertAtCursor =====
+    function showResultInCard(text, translation, title) {
+      const card = $('transcriptionCard');
+      const live = $('liveText');
+      const tabs = $('resultTabs');
+      const resEn = $('result');
+      const resRu = $('resultRu');
+      const badge = $('translationBadge');
+      const actions = $('resultActions');
+
+      // Hide live (we're done)
+      live.classList.add('hidden');
+      live.textContent = '';
+
+      // Update title
+      if (title) $('transcriptionTitle').textContent = title;
+
+      // Show EN tab (default) + RU tab if translation available
+      const hasTranslation = !!translation && translation.trim().length > 0;
+      resRu.value = text;  // RU = original
+      resEn.value = hasTranslation ? translation : text;  // EN = translation, fallback to original
+      // Tabs visibility
+      tabs.classList.remove('hidden');
+      // Activate EN tab by default
+      const tabEn = tabs.querySelector('[data-tab="en"]');
+      const tabRu = tabs.querySelector('[data-tab="ru"]');
+      if (hasTranslation) {
+        tabRu.classList.remove('hidden');
+        tabEn.classList.add('active');
+        tabRu.classList.remove('active');
+        resEn.classList.remove('hidden');
+        resRu.classList.add('hidden');
+        badge.textContent = 'Argos · ' + (text.length || 0) + ' → ' + (translation.length || 0) + ' символов';
+      } else {
+        // Нет перевода — показываем только RU, табы скрываем
+        tabRu.classList.add('hidden');
+        tabEn.classList.add('active');
+        resEn.classList.remove('hidden');
+        resRu.classList.add('hidden');
+        badge.textContent = 'перевод недоступен';
+      }
+      actions.classList.remove('hidden');
+      card.classList.remove('hidden');
+    }
+
+    // Tab switching
+    document.addEventListener('click', (e) => {
+      const tab = e.target.closest('.result-tab');
+      if (!tab) return;
+      const tabsRoot = $('resultTabs');
+      tabsRoot.querySelectorAll('.result-tab').forEach(t => t.classList.toggle('active', t === tab));
+      const which = tab.dataset.tab;
+      $('result').classList.toggle('hidden', which !== 'en');
+      $('resultRu').classList.toggle('hidden', which !== 'ru');
+    });
+
+    // Copy button: копирует активный таб
+    $('copy').addEventListener('click', async () => {
+      const activeTab = $('resultTabs').querySelector('.result-tab.active');
+      const which = activeTab ? activeTab.dataset.tab : 'en';
+      const txt = which === 'ru' ? $('resultRu').value : $('result').value;
+      if (!txt) return;
+      try {
+        await navigator.clipboard.writeText(txt);
+        setStatus('📋 Скопировано (' + which.toUpperCase() + ')', 'success');
+      } catch {
+        // fallback
+        const ta = which === 'ru' ? $('resultRu') : $('result');
+        ta.select();
+        document.execCommand('copy');
+      }
+    });
+
+    // Download: скачивает русский (оригинал) + английский (если есть)
+    $('download').addEventListener('click', () => {
+      const ru = $('resultRu').value;
+      const en = $('result').value;
+      const hasTranslation = $('resultRu').value && $('result').value && $('resultRu').value !== $('result').value;
+      if (hasTranslation) {
+        const blob = new Blob(
+          ['--- Original (RU) ---\n' + ru + '\n\n--- Translation (EN) ---\n' + en],
+          { type: 'text/plain;charset=utf-8' }
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'transcript_' + Date.now() + '.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // Просто скачиваем что есть
+        const ta = $('result').value ? $('result') : $('resultRu');
+        const blob = new Blob([ta.value], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'transcript_' + Date.now() + '.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    });
+
+    // ===== Handy-style: вставить в позицию курсора в последнем сфокусированном поле =====
+    let lastFocusable = null;
+    document.addEventListener('focusin', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+        lastFocusable = t;
+      }
+    });
+    function insertAtCursorInLast(text) {
+      if (!lastFocusable) {
+        setStatus('📍 Сначала кликните в поле ввода (текст скопирован в буфер)', 'error');
+        navigator.clipboard.writeText(text).catch(() => {});
+        return false;
+      }
+      const el = lastFocusable;
+      el.focus();
+      // Modern Selection API
+      try {
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? el.value.length;
+        const before = el.value.slice(0, start);
+        const after = el.value.slice(end);
+        el.value = before + text + after;
+        // update cursor position
+        const pos = start + text.length;
+        if (el.setSelectionRange) el.setSelectionRange(pos, pos);
+        // Trigger input event so frameworks see the change
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      } catch (e) {
+        // contenteditable fallback
+        try {
+          document.execCommand('insertText', false, text);
+          return true;
+        } catch {
+          navigator.clipboard.writeText(text).catch(() => {});
+          return false;
+        }
+      }
+    }
+    $('insertAtCursor').addEventListener('click', () => {
+      const activeTab = $('resultTabs').querySelector('.result-tab.active');
+      const which = activeTab ? activeTab.dataset.tab : 'en';
+      const txt = which === 'ru' ? $('resultRu').value : $('result').value;
+      if (!txt) return;
+      if (insertAtCursorInLast(txt)) {
+        setStatus('📍 Вставлено в активное поле (в позицию курсора)', 'success');
+      }
+    });
 
     // Graceful: closing tab while recording → server should finalize
     window.addEventListener('beforeunload', () => {

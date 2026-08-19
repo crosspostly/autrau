@@ -862,14 +862,28 @@ async def api_voice_stop(payload: dict) -> dict:
         info.setdefault("provider", p_name)
         info.setdefault("model", m_name)
         path = clean.save_voice_memo(text, info)
+        translation_text = None
+        translation_provider = None
         if path:
-            _maybe_translate(text, info, target_path=path)
+            tpath = _maybe_translate(text, info, target_path=path)
+            if tpath and tpath.is_file():
+                # Прочитать .en.txt (без шапки) для UI
+                try:
+                    raw = tpath.read_text(encoding="utf-8")
+                    # strip header (# комментарии) — оставить только текст
+                    lines = [ln for ln in raw.splitlines() if not ln.startswith("#")]
+                    translation_text = "\n".join(lines).strip()
+                    translation_provider = info.get("translation_provider", "argos")
+                except Exception as e:
+                    log.warning("не удалось прочитать %s: %s", tpath, e)
         log.info("Voice memo saved: %s (chunks=%d)", path.name, len(chunks))
         return {
             "id": sid,
             "text": text,
             "file": path.name,
             "dir": str(clean.voice_memos_dir()),
+            "translation": translation_text,
+            "translation_provider": translation_provider,
         }
     except HTTPException:
         raise
@@ -1173,7 +1187,16 @@ async def transcribe(
                 _info.setdefault("model", m_name)
                 _path = clean.save_transcript(file.filename, out.get("text", ""), _info)
                 if _path:
-                    _maybe_translate(out.get("text", ""), _info, target_path=_path)
+                    tpath = _maybe_translate(out.get("text", ""), _info, target_path=_path)
+                    if tpath and tpath.is_file():
+                        # Прочитать .en.txt (без шапки) и положить в out
+                        try:
+                            raw = tpath.read_text(encoding="utf-8")
+                            lines = [ln for ln in raw.splitlines() if not ln.startswith("#")]
+                            out["translation"] = "\n".join(lines).strip()
+                            out["translation_provider"] = _info.get("translation_provider", "argos")
+                        except Exception:
+                            pass
             except Exception as se:
                 log.warning("Не удалось сохранить расшифровку: %s", se)
             _enqueue("done", 100, out)
