@@ -2744,22 +2744,24 @@
       }
     });
 
-    // Install Argos Translate
+    // Install Argos Translate (полностью автоматически — pip + модели в фоне,
+    // установка в venv где запущен сервер, рестарт НЕ нужен)
     $('installArgos').addEventListener('click', async () => {
-      if (!confirm('Установить argostranslate (~50 МБ) через pip? После установки нужно перезапустить сервер.')) return;
+      if (!confirm('Установить Argos Translate? Будет скачан пакет + обе модели (~336 МБ) в фоне. Никаких перезапусков не потребуется.')) return;
       const st = $('translateStatus');
-      st.textContent = 'ставлю argostranslate… (может занять 1-2 мин)';
+      st.textContent = 'ставлю argostranslate + скачиваю модели en↔ru… (может занять 1-2 мин)';
       const btn = $('installArgos');
       btn.disabled = true;
       try {
         const r = await fetch(API + '/api/translate/install-argos', { method: 'POST' });
         const j = await r.json();
         if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
-        if (j.import_works) {
-          st.innerHTML = '✅ Установлено. Перезапустите сервер: <code>./start.bat</code> → потом выберите Argos → 🧪 Тест.';
+        if (j.already_installed) {
+          st.innerHTML = '✅ Argos уже установлен. Модели: ' + (j.models || []).join(', ');
+        } else if (j.started) {
+          st.innerHTML = '⏳ Установка началась в фоне. Следи за /api/translate/providers — когда <code>argos.available=true</code>, всё готово.';
         } else {
-          st.innerHTML = '⚠️ Установлено, но ' + (j.import_error || 'import завис') + '. ' +
-            (j.install_command || 'Попробуйте pip install --force-reinstall argostranslate');
+          st.innerHTML = '✅ Готово. ' + (j.note || 'Модели загружены.');
         }
       } catch (e) {
         st.innerHTML = '❌ ' + e.message;
