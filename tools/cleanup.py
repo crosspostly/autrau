@@ -41,8 +41,18 @@ def voice_memos_dir() -> Path:
     return VOICE_MEMOS_DIR
 
 
-def save_transcript(original_name: Optional[str], text: str, info: dict) -> Path:
-    """Persist one transcript as a .txt file; returns the path."""
+def save_transcript(
+    original_name: Optional[str],
+    text: str,
+    info: dict,
+    segments: Optional[list[dict]] = None,
+) -> Path:
+    """Persist one transcript as a .txt file; returns the path.
+
+    Если переданы `segments` (список {start, end, text}), дополнительно сохраняет
+    sidecar-файл `<name>.segments.json` — для последующего экспорта в SRT/VTT/JSON
+    (см. tools/exports.py и /api/transcripts/{name}/export).
+    """
     TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
     # Извлекаем имя и расширение оригинального файла
     orig_path = Path(original_name or "audio")
@@ -63,10 +73,41 @@ def save_transcript(original_name: Optional[str], text: str, info: dict) -> Path
         f"# Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"# Модель: {info.get('provider', '?')} / {info.get('model', '?')}",
         f"# Язык: {info.get('language', '?')}",
-        "",
     ]
+    if segments:
+        header.append(f"# Сегментов: {len(segments)}")
+    header.append("")
     path.write_text("\n".join(header) + (text or "").strip() + "\n", encoding="utf-8")
     log.info("Saved transcript: %s", path.name)
+
+    # Sidecar с сегментами для экспорта SRT/VTT/JSON.
+    # Сохраняется всегда когда segments переданы (даже пустой список — для маркера).
+    if segments is not None:
+        import json as _json
+        seg_path = path.with_name(path.stem + ".segments.json")
+        seg_payload = {
+            "version": 1,
+            "transcript": path.name,
+            "language": info.get("language", "?"),
+            "provider": info.get("provider", "?"),
+            "model": info.get("model", "?"),
+            "duration": (segments[-1].get("end", 0.0) if segments else 0.0),
+            "segments": [
+                {
+                    "start": float(s.get("start", 0.0)),
+                    "end": float(s.get("end", 0.0)),
+                    "text": (s.get("text") or "").strip(),
+                }
+                for s in segments
+                if s.get("text")  # пропускаем пустые
+            ],
+        }
+        seg_path.write_text(
+            _json.dumps(seg_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        log.info("Saved segments: %s (%d entries)", seg_path.name, len(seg_payload["segments"]))
+
     return path
 
 
@@ -97,11 +138,17 @@ def save_translated(original_transcript: Path, translated_text: str, info: dict)
     return target
 
 
-def save_voice_memo(text: str, info: dict) -> Path:
+def save_voice_memo(
+    text: str,
+    info: dict,
+    segments: Optional[list[dict]] = None,
+) -> Path:
     """Сохраняет голосовую заметку в data/voice-memos/.
 
     Имя: "YYYY-MM-DD_HH-MM-SS.txt" (без префикса имени файла, потому что источник — микрофон).
     info: {provider, model, language, duration_sec?}
+    segments: опционально — список {start, end, text} для sidecar .segments.json
+              (нужен для экспорта в SRT/VTT/JSON).
     """
     VOICE_MEMOS_DIR.mkdir(parents=True, exist_ok=True)
     base = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -117,10 +164,39 @@ def save_voice_memo(text: str, info: dict) -> Path:
         f"# Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{duration_str}",
         f"# Модель: {info.get('provider', '?')} / {info.get('model', '?')}",
         f"# Язык: {info.get('language', '?')}",
-        "",
     ]
+    if segments:
+        header.append(f"# Сегментов: {len(segments)}")
+    header.append("")
     path.write_text("\n".join(header) + (text or "").strip() + "\n", encoding="utf-8")
     log.info("Saved voice memo: %s", path.name)
+
+    if segments is not None:
+        import json as _json
+        seg_path = path.with_name(path.stem + ".segments.json")
+        seg_payload = {
+            "version": 1,
+            "voice_memo": path.name,
+            "language": info.get("language", "?"),
+            "provider": info.get("provider", "?"),
+            "model": info.get("model", "?"),
+            "duration": (segments[-1].get("end", 0.0) if segments else 0.0),
+            "segments": [
+                {
+                    "start": float(s.get("start", 0.0)),
+                    "end": float(s.get("end", 0.0)),
+                    "text": (s.get("text") or "").strip(),
+                }
+                for s in segments
+                if s.get("text")
+            ],
+        }
+        seg_path.write_text(
+            _json.dumps(seg_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        log.info("Saved memo segments: %s (%d entries)", seg_path.name, len(seg_payload["segments"]))
+
     return path
 
 

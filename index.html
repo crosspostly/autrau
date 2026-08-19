@@ -495,6 +495,30 @@
     .actions .spacer { flex: 1; }
     code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0, 0, 0, 0.3); padding: 2px 8px; border-radius: 4px; }
 
+    /* Dropdown (для меню «Экспорт») */
+    .dropdown { position: relative; display: inline-block; }
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      min-width: 220px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      z-index: 100;
+      overflow: hidden;
+    }
+    .dropdown-content button {
+      display: block; width: 100%; text-align: left;
+      padding: 10px 14px; border: none; background: none;
+      color: var(--text); font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .dropdown-content button:hover { background: var(--surface-3); }
+    .dropdown.open .dropdown-content { display: block; }
+
     /* ============================================================
        Tabs
        ============================================================ */
@@ -900,6 +924,15 @@
       <div class="actions hidden" id="resultActions">
         <button class="secondary" id="copy">📋 Скопировать</button>
         <button class="secondary" id="download">💾 Скачать .txt</button>
+        <div class="dropdown" id="exportMenu">
+          <button class="secondary" id="exportBtn" title="Экспорт субтитров или данных">📤 Экспорт ▾</button>
+          <div class="dropdown-content" id="exportDropdown">
+            <button data-fmt="srt">📝 SRT (субтитры)</button>
+            <button data-fmt="vtt">📝 VTT (WebVTT)</button>
+            <button data-fmt="json">{ } JSON (сегменты)</button>
+            <button data-fmt="txt">📄 TXT (простой текст)</button>
+          </div>
+        </div>
         <button class="secondary" id="insertAtCursor" title="Вставить текст в поле, где был курсор (Handy-style)">📍 Вставить в фокус</button>
         <span class="spacer"></span>
         <span class="small" id="stats"></span>
@@ -1106,6 +1139,7 @@
       queue: [], // [{id, file, status:'pending'|'running'|'done'}]
       queueIdCounter: 0,
       queueRunning: false,
+      lastFileName: null,  // имя последней сохранённой расшифровки (для экспорта SRT/VTT/JSON)
     };
 
     // ===== INIT =====
@@ -1709,6 +1743,8 @@
               $('micIcon').className = 'mic-icon done';
               $('wfProgress').style.width = '100%';
               const text = m.payload.text || acc;
+              // Запомнить имя файла (для экспорта SRT/VTT/JSON)
+              if (m.payload.file) state.lastFileName = m.payload.file;
               // Для ФАЙЛОВ: карточка показывает только оригинал (translation
               // сохраняется в .en.txt отдельно, но в UI не выводим — иначе
               // засирает экран английским поверх русского).
@@ -2368,6 +2404,8 @@
         const j = await r.json();
         if (!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
         showOverlay('Готово ✓', (j.text || '').slice(0, 240) + ((j.text || '').length > 240 ? '…' : ''));
+        // Запомнить имя файла (для экспорта SRT/VTT/JSON)
+        if (j.file) state.lastFileName = j.file;
         // Показать результат в карточке (как у обычных файлов) с вкладками RU + EN
         showResultInCard(j.text || '', j.translation || '', '🎙 Голосовая заметка');
         // Switch to voice tab and refresh
@@ -2495,6 +2533,48 @@
         URL.revokeObjectURL(url);
       }
     });
+
+    // ===== Export: SRT / VTT / JSON / TXT через /api/transcripts/{name}/export =====
+    const exportMenu = $('exportMenu');
+    const exportBtn = $('exportBtn');
+    if (exportBtn && exportMenu) {
+      exportBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportMenu.classList.toggle('open');
+      });
+      // Close dropdown on outside click
+      document.addEventListener('click', (e) => {
+        if (!exportMenu.contains(e.target)) exportMenu.classList.remove('open');
+      });
+      // Format buttons
+      exportMenu.querySelectorAll('[data-fmt]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          exportMenu.classList.remove('open');
+          const fmt = btn.dataset.fmt;
+          if (!state.lastFileName) {
+            setStatus('📤 Нет сохранённой расшифровки для экспорта. Сначала распознайте файл.', 'error');
+            return;
+          }
+          try {
+            const url = API + '/api/transcripts/' + encodeURIComponent(state.lastFileName) + '/export?format=' + fmt;
+            const r = await fetch(url);
+            if (!r.ok) {
+              const t = await r.text();
+              throw new Error(t || ('HTTP ' + r.status));
+            }
+            const blob = await r.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = state.lastFileName.replace(/\.txt$/, '') + '.' + fmt;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            setStatus('📤 Экспортировано: ' + a.download, 'success');
+          } catch (e) {
+            setStatus('📤 Ошибка экспорта: ' + (e.message || e), 'error');
+          }
+        });
+      });
+    }
 
     // ===== Handy-style: вставить в позицию курсора в последнем сфокусированном поле =====
     let lastFocusable = null;

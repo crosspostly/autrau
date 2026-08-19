@@ -46,7 +46,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -500,6 +500,52 @@ async def api_transcript_file(name: str) -> Any:
     )
 
 
+@app.get("/api/transcripts/{name}/export")
+async def api_transcript_export(name: str, format: str = "srt") -> Any:
+    """Экспорт расшифровки в SRT / VTT / JSON / TXT (v1.5.6).
+
+    Использует sidecar `<stem>.segments.json` если есть, иначе — «плоский»
+    экспорт из одного сегмента (равного всему тексту). Так старые расшифровки
+    без таймстампов тоже можно скачать, хоть и без точного времени.
+
+    Query: `format=srt|vtt|json|txt` (default `srt`).
+    Response: файл с правильным Content-Disposition: attachment (скачивание).
+    """
+    from tools import exports as exp
+    safe = Path(name).name
+    path = clean.transcripts_dir().joinpath(safe)
+    if not path.is_file():
+        raise HTTPException(404, f"Расшифровка '{name}' не найдена")
+
+    fmt = (format or "srt").lower()
+    if fmt not in exp.SUPPORTED_FORMATS:
+        raise HTTPException(400, f"Неподдерживаемый формат: {format}. "
+                                 f"Доступные: {', '.join(exp.SUPPORTED_FORMATS)}")
+
+    # Текст нужен для fallback и txt формата
+    raw = path.read_text(encoding="utf-8")
+    # Убираем # заголовок
+    text_lines = [ln for ln in raw.splitlines() if not ln.startswith("#")]
+    text_only = "\n".join(text_lines).strip()
+
+    try:
+        content, media_type = exp.export_transcript(path, text_only, fmt)
+    except Exception as e:
+        log.exception("Export failed for %s: %s", safe, e)
+        raise HTTPException(500, f"Ошибка экспорта: {e}")
+
+    # Имя файла: 2026-08-19_test_ru.mp3.srt
+    out_name = path.stem + f".{fmt}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{out_name}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @app.post("/api/favorites")
 async def api_favorites(payload: dict) -> dict:
     """Toggle or explicitly set favorite status for one transcript.
@@ -861,7 +907,10 @@ async def api_voice_stop(payload: dict) -> dict:
         info = out.get("info", {}) or {}
         info.setdefault("provider", p_name)
         info.setdefault("model", m_name)
-        path = clean.save_voice_memo(text, info)
+        # Передаём segments в save_voice_memo — пишутся в sidecar
+        # <stem>.segments.json для последующего экспорта в SRT/VTT/JSON.
+        _voice_segs = out.get("segments") or []
+        path = clean.save_voice_memo(text, info, segments=_voice_segs)
         translation_text = None
         translation_provider = None
         if path:
@@ -1185,7 +1234,15 @@ async def transcribe(
                 _info = out.get("info", {}) or {}
                 _info.setdefault("provider", p_name)
                 _info.setdefault("model", m_name)
-                _path = clean.save_transcript(file.filename, out.get("text", ""), _info)
+                # Передаём segments в save_transcript — пишутся в sidecar
+                # <stem>.segments.json для последующего экспорта в SRT/VTT/JSON.
+                _segs = out.get("segments") or []
+                _path = clean.save_transcript(
+                    file.filename, out.get("text", ""), _info, segments=_segs,
+                )
+                # Сообщим клиенту имя файла, чтобы работал /api/transcripts/{name}/export
+                if _path:
+                    out["file"] = _path.name
                 if _path:
                     tpath = _maybe_translate(out.get("text", ""), _info, target_path=_path)
                     if tpath and tpath.is_file():

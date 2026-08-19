@@ -19,6 +19,7 @@
 | `POST` | `/api/cleanup` | Удалить расшифровки старше N дней |
 | `GET` | `/api/transcripts` | Список расшифровок + флаги избранного + наличие `.en.txt` |
 | `GET` | `/api/transcripts/{name}` | Скачать/открыть один `.txt` |
+| `GET` | `/api/transcripts/{name}/export?format=...` | Экспорт в SRT / VTT / JSON / TXT (v1.5.6) |
 | `DELETE` | `/api/transcripts` | Удалить выбранные расшифровки (body: `{"names": [...]}`) |
 | `POST` | `/api/transcripts/open-folder` | Открыть папку `data/transcripts/` в проводнике |
 | `POST` | `/api/favorites` | Пометить/снять избранное (защита от авто-очистки) |

@@ -6,29 +6,41 @@ gsd_state:
   current_phase: 4
   current_phase_name: "Polish + docs"
   last_updated: 2026-08-19
+next_milestone: v1.6
+next_milestone_plan: "portable Windows .exe (Tauri wrapper)"
 ---
 
-# State — v1.5 (Handi-like UX)
+# State — v1.5 (Handi-like UX) + v1.5.1–5 hot-fix series
 
 ## Current Position
 
-**Phase:** 4 — Polish + docs ✅ DONE
-**Status:** milestone complete
-**Next action:** start v1.6 (portable Windows exe) when ready
+**Milestone:** v1.5 ✅ COMPLETE
+**Hot-fix series:** v1.5.1, v1.5.2, v1.5.3, v1.5.4, v1.5.5 ✅ all shipped 2026-08-19
+**Push:** 9 коммитов запушены в `origin/main` (ef13358 → c5c8e41)
+**Next action:** v1.5.6 (small win: SRT/VTT/JSON export) → затем v1.6 (Tauri wrapper)
 
 ## Progress
 
-| Phase | Status         | Done at    | Commits |
-|-------|----------------|------------|---------|
-| 1     | ✅ done         | 2026-08-19 | 3d10ebc |
-| 2     | ✅ done         | 2026-08-19 | 428db5c, f32af6e, 1f829f1, 6b5c47f, ca29069, 64b4934 |
-| 3     | ✅ done         | 2026-08-19 | f13bdb6, 8f7428e, 358992f |
-| 4     | ✅ done         | 2026-08-19 | docs + .planning update |
+| Phase         | Status       | Done at    | Commits / scope                                    |
+|---------------|--------------|------------|----------------------------------------------------|
+| 1             | ✅ done       | 2026-08-19 | 3d10ebc                                            |
+| 2             | ✅ done       | 2026-08-19 | 428db5c, f32af6e, 1f829f1, 6b5c47f, ca29069, 64b4934 |
+| 3             | ✅ done       | 2026-08-19 | f13bdb6, 8f7428e, 358992f                          |
+| 4             | ✅ done       | 2026-08-19 | docs + .planning update                            |
+| **v1.5.1**    | ✅ hot-fix    | 2026-08-19 | d874d09 — Argos Translate локально (~336 МБ)       |
+| **v1.5.2**    | ✅ hot-fix    | 2026-08-19 | e64ea7c — preflight + auto-install Argos на старте |
+| **v1.5.3**    | ✅ hot-fix    | 2026-08-19 | 9c17ea5 — автоперевод ON + Handy-style оверлей     |
+| **v1.5.4**    | ✅ hot-fix    | 2026-08-19 | d28bee1 — EN/RU табы + insert-at-cursor (Handy)    |
+| **v1.5.5**    | ✅ hot-fix    | 2026-08-19 | d5ea4da — .txt открывается в браузере              |
+| **v1.5.5.b**  | ✅ hot-fix    | 2026-08-19 | eed46e1 — files vs voice-memos в карточке          |
+| **v1.5.5.c**  | ✅ hot-fix    | 2026-08-19 | c5c8e41 — UI: убрать misleading "import завис"      |
 
 ## Hot fixes (вне phase)
 
 - ✅ Расширение файла в имени транскрипта (REQ-v1.5-001)
 - ✅ Размер в КБ (REQ-v1.5-002)
+- ✅ EN/RU табы в карточке (v1.5.4)
+- ✅ Voice-memos inline disposition (v1.5.5)
 
 ## Active Blockers
 
@@ -36,63 +48,88 @@ gsd_state:
 
 ## Pending Todos
 
-### Phase 2 (hotkey + voice memos)
-- [ ] 2.1: Backend voice-memos API
-- [ ] 2.2: Frontend MediaRecorder + hotkey
-- [ ] 2.3: UI табы в расшифровках
-- [ ] 2.4: Config hotkey + voice-memo dir
-- [ ] Tests для всех 2.x
-- [ ] Commit per sub-phase
+### v1.5.6 — SRT/VTT/JSON экспорт (NEXT, быстрый win)
+- [ ] 6.1: `POST /api/transcripts/{name}/export?format=srt|vtt|json` — использует
+       `segments` из `/transcribe` ответа (faster-whisper отдаёт таймстампы слов/сегментов)
+- [ ] 6.2: кнопка «💾 Экспорт» в карточке результата (в actions) с dropdown
+- [ ] 6.3: UI — при отсутствии таймстампов (file uploaded без сохранения segments)
+       → graceful fallback «Скачать только .txt» с подсказкой
+- [ ] 6.4: tests для format конвертеров
+- [ ] 6.5: docs/API.md + docs/ROADMAP.md
 
-### Phase 3 (translation)
-- [ ] 3.1: Translation provider abstraction
-- [ ] 3.2: Server translate endpoint + hook
-- [ ] 3.3: UI галочка + badge
-- [ ] Tests
+### v1.6 — Portable Windows .exe (Tauri wrapper)
+- [ ] **Этап 1: research** — Tauri vs Electron vs PyWebView (решено: Tauri)
+- [ ] **Этап 2: scaffold** — `autrau-desktop/` рядом с `autrau/`, `npm create tauri-app`
+- [ ] **Этап 3: бандлинг** — Python сервер встроен как sidecar (PyInstaller → exe)
+- [ ] **Этап 4: native window** — `framed: false`, transparent, always-on-top toggle
+- [ ] **Этап 5: system tray** — icon + context menu (open/show/stop/exit)
+- [ ] **Этап 6: global hotkey** — Tauri `global_shortcut` plugin (работает в любом приложении)
+- [ ] **Этап 7: auto-start** — `tauri-plugin-autostart` + Windows startup folder
+- [ ] **Этап 8: portable сборка** — single `.exe` без установки, < 50 МБ без моделей
 
-### Phase 4 (polish)
-- [ ] docs/ROADMAP.md update
-- [ ] docs/CONFIGURATION.md add new fields
-- [ ] README.md секция про voice memos
-- [ ] CI green
-- [ ] Memory note
+### v2.0 — Telegram-бот (по запросу)
+- [ ] backend: `python-telegram-bot` или `aiogram`
+- [ ] bot commands: `/start`, `/transcribe` (reply на voice/audio), `/lang`, `/export`
+- [ ] лимиты: Bot API 20 МБ на файл, > 20 МБ резать на чанки
+- [ ] deploy: рядом с сервером, токен в `.env`
 
-## Recent Commits (last 5)
+## Recent Commits (last 9)
 
 ```
-3d10ebc  transcript filename: preserve source extension + show KB if < 1MB
-d2dca74  add select-all checkbox to transcripts list
-2f3cc90  hide faster-whisper from model dropdown (CPU-only, бесполезен на AMD GPU)
-c6a5a10  remove onlyRu filter — русский фильтр больше не нужен
-0791b32  queue bulk selection: select-all + checkboxes + bulk delete
+c5c8e41  fix(ui): убрать 'import завис' и 'restart сервера' в install-argos UX
+eed46e1  fix: разделить translation для файлов и голосовых, убрать 3.5
+d28bee1  v1.5.4: EN/RU табы в карточке результата + Handy-style вставка в курсор
+d5ea4da  fix(voice-memos): клик по .txt открывает в браузере, а не скачивает
+9c17ea5  v1.5.3: автоперевод ON по умолчанию + плавающее окошко записи (Handy-style)
+e64ea7c  v1.5.2: видимый preflight + авто-установка Argos при старте
+cc1148a  docs: финал manifest для gsd-docs-update (v1.5.1)
+d89c62c  docs: синхронизировано с v1.5.1 (Argos Translate + UI в шестерёнке)
+d874d09  v1.5.1: Argos Translate — локальный движок, EN<->RU, ~336 МБ
 ```
 
 ## Server Status
 
-- **PID:** 17712 (running on port 8000)
-- **Python:** WindowsApps Python 3.13
-- **Last restart:** 2026-08-19 (after Phase 1 commit)
+- **PID:** зависит от запуска (auto-restart через WindowsApps Python crash recovery)
+- **Python:** WindowsApps Python 3.13, сервер в `.venv\Scripts\python.exe`
+- **Listen:** `http://127.0.0.1:8000/`
+- **Argos models:** `~/local/share/argos-translate/packages/{translate-en_ru-1_9, translate-ru_en-1_9}`
 
 ## Open Questions
 
-1. **Translation provider** — LibreTranslate (медленный, бесплатный), MiniMax (платный, быстрый), или NLLB-200 локальный (600MB)? Спросить юзера перед Phase 3.
-2. **Hotkey default** — `Ctrl+Shift+R` (конфликтует с browser reload в некоторых браузерах) или `Alt+R` (без конфликтов)? Предлагаю `Alt+R` или сделать настраиваемым.
-3. **Глобальный хоткей** — оставить только in-browser, или делать Electron wrapper? Пока in-browser.
+1. **Tauri vs Electron vs PyWebView для v1.6** — РЕШЕНО: Tauri (бинарь меньше, WebView2
+   на Windows, native global hotkey, system tray из коробки).
+2. **Bundling Python sidecar** — PyInstaller vs Nuitka. PyInstaller проще, Nuitka быстрее
+   на старте. Начать с PyInstaller.
+3. **Single .exe с моделями или без?** — Whisper модели слишком большие для бандла.
+   Решение: дефолтный бандл = exe + UI, модели скачиваются при первом запуске.
+4. **Глобальный хоткей default** — `Alt+R` без конфликтов. `Ctrl+Shift+R` пусть остаётся
+   in-browser fallback.
 
-## Decisions Pending Approval
+## Decisions (принято)
 
-- [ ] Hotkey default = `Ctrl+Shift+R` (можно настроить)
-- [ ] Voice memos в отдельной папке `data/voice-memos/`, не в `data/transcripts/`
-- [ ] Translation provider по умолчанию — LibreTranslate (если доступен) → MiniMax fallback
+- [x] Translation provider default = `argos` (локально, ~336 МБ, без облака)
+- [x] Translation fallback = `libretranslate` (если argos недоступен; public instances
+      мёртвы, но если юзер поднял self-host — работает)
+- [x] `translate_to_en = true` by default (v1.5.3)
+- [x] Voice memos в `data/voice-memos/`, не в `data/transcripts/`
+- [x] Hotkey default = `Ctrl+Shift+R` (можно настроить в шестерёнке)
+- [x] Глобальный хоткей только в v1.6 (Tauri), v1.5 — in-browser
+- [x] Files vs voice-memos: файлы показывают только оригинал в карточке, голосовые —
+      обе вкладки EN/RU
 
 ## Key Context
 
-- Server runs on WindowsApps Python 3.13, не на MS Store Python
-- `data/` is gitignored — все runtime-файлы (config, transcripts, voice-memos, models)
-- Providers в `providers/` — `whisper-cpp`, `faster-whisper` (скрыт в UI), `parakeet` (скрыт), `parakeet-onnx`
+- Server runs on `.venv\Scripts\python.exe` (venv), не на WindowsApps Python напрямую
+- `data/` is gitignored — runtime файлы (config, transcripts, voice-memos, models)
+- Providers в `providers/` — `whisper-cpp` (CPU), `parakeet-onnx` (CPU/DirectML)
+- `faster-whisper` и `parakeet` — скрыты из UI dropdown (CPU-only, бесполезны на AMD GPU)
 - UI: vanilla JS, всё в `index.html` (без сборки)
-- Tests в `.gitignore` — локальные `_test_*.py`, `_api_check*.py`
+- Translation providers (real-time 2026-08-19): ✅ argos, ✅ libretranslate (код жив, public
+  instances мертвы), ✗ minimax (нужен API key)
+- `translate(text, source=source)` в Argos — БАГ (нет такого параметра). Используем
+  `langdetect` + Cyrillic-эвристику.
+- Server logs: `autrau-server.out.log` (UTF-8, append, FileHandler), `autrau-server.err.log`
 
 ---
 
-*Last updated: 2026-08-19*
+*Last updated: 2026-08-19 23:05 UTC+3*
