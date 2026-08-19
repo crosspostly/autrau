@@ -540,6 +540,7 @@ async def api_voice_memo_file(name: str) -> Any:
     return FileResponse(
         path, media_type="text/plain; charset=utf-8",
         filename=safe,
+        content_disposition_type="inline",  # открыть в браузере, не «сохранить как» (как transcripts)
     )
 
 
