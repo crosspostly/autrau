@@ -1,29 +1,41 @@
 ---
 gsd_state:
-  version: 2
+  version: 3
   milestone: v1.5.7
-  status: in_progress
+  status: complete
   current_phase: 5
   current_phase_name: "Vibe-inspired quick wins"
-  last_updated: 2026-08-19
+  last_updated: 2026-08-20
 previous_milestone: v1.5
+next_milestone: v1.6
+next_milestone_plan: "Real auto-update (v1.5.8) → Tauri wrapper (v1.6)"
 ---
 
-# State — v1.5.7 (Vibe-inspired quick wins) — IN PROGRESS
+# State — v1.5.7 (Vibe-inspired quick wins) ✅ COMPLETE
 
 ## Current Position
 
-**Milestone:** v1.5.7 «Vibe-inspired quick wins» 🔄 IN PROGRESS
-**Phase:** 5 — Vibe-inspired quick wins
+**Milestone:** v1.5.7 «Vibe-inspired quick wins» ✅ DONE (2026-08-20)
+**Phase:** 5 — все 5 sub-phases shipped
 **Source:** `C:\obsidian\04_Knowledge\wiki\open-source-vibe-analysis.md`
 **Plan:** `.planning/phases/5-vibe-inspired/PLAN.md`
 
 **Done ранее:**
 - v1.5 milestone (Handi-like UX) ✅
 - v1.5.1-5 hot-fix series ✅
-- v1.5.6 SRT/VTT/JSON export ✅ (commit b18442d, в origin)
+- v1.5.6 SRT/VTT/JSON export ✅
+- v1.5.7 Vibe-inspired ✅ (commits 7341911, d1d43dd, 8198aa3, f843bdb)
 
-**Next action:** 5.1 — CLI tool `python -m autrau.cli`
+**Next action:** v1.5.8 — Real auto-update (доделать `auto_update_app`)
+
+## v1.5.7 Commits (4)
+
+```
+f843bdb  v1.5.7.5: AGENTS.md update + Swagger /docs
+8198aa3  v1.5.7.3: system audio loopback (Windows WASAPI)
+d1d43dd  v1.5.7.2: yt-dlp endpoint + UI
+7341911  v1.5.7.1: CLI tool (python -m autrau.cli)
+```
 
 ## Progress
 
