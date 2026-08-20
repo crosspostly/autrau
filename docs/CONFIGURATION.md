@@ -72,6 +72,21 @@ Autrau настраивается двумя способами: **файл ко
 
 Обязательных настроек нет: при отсутствии файла или нечитаемом JSON сервер запускается со встроенными значениями по умолчанию (в лог пишется предупреждение). Файл пересоздаётся при первом запуске.
 
+## Дополнительные зависимости (опциональные)
+
+Конфиг не управляет установкой доп. пакетов — их надо ставить вручную в venv сервера:
+
+| Пакет | Нужен для | Как установить |
+|-------|-----------|----------------|
+| `ffmpeg` | Извлечение звука из видео (mp4/mkv/mov) | `winget install Gyan.FFmpeg` (Windows) / `apt install ffmpeg` (Linux) / `brew install ffmpeg` (macOS) |
+| `argostranslate` + `langdetect` | Локальный перевод ru→en (Argos Translate) | `pip install argostranslate langdetect` (или кнопка «📥 Установить Argos» в UI) |
+| `yt-dlp` | URL → транскрипция (YouTube/Vimeo/etc) | `pip install yt-dlp` (только в venv сервера) |
+| `soundcard` | Захват системного звука (Windows WASAPI) | `pip install soundcard` (нужен CFFI; на Windows обычно работает из коробки) |
+| `pywhispercpp` | Whisper.cpp провайдер (опционально) | `pip install pywhispercpp` |
+| `nemo_toolkit[asr]` | Parakeet v3 через NVIDIA NeMo (опционально, ~2-3 ГБ) | `pip install nemo_toolkit[asr]` |
+
+Эти пакеты перечислены в `requirements.txt` только базовые (`yt-dlp>=2024.0.0` уже добавлен в v1.5.7, `soundcard` — ставится вручную).
+
 ## Приоритет значений
 
 1. **Аргументы запроса** (`POST /transcribe`: `provider`, `model`, `device`, `language`) — переопределяют всё для одного запроса.

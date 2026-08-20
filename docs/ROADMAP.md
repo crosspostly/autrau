@@ -78,6 +78,44 @@
 - Поддерживает русскую кириллицу (UTF-8). SRT использует `,` для миллисекунд,
   VTT — `.` (стандарт W3C).
 
+### 🛠 CLI tool (v1.5.7)
+- **Статус:** ✅ сделано 2026-08-20 (v1.5.7)
+- `python -m autrau.cli` — subcommands: `transcribe`, `batch`, `providers`, `models`,
+  `status`, `health`. Работает через HTTP API сервера, использует urllib (без
+  requests). `AUTRAU_API` env var для override URL.
+- Пакетная обёртка `autrau/__init__.py` + `__main__.py` + `cli.py` для
+  `python -m autrau` (запуск server.py) и `python -m autrau.cli`.
+
+### 🔗 URL → транскрипция через yt-dlp (v1.5.7)
+- **Статус:** ✅ сделано 2026-08-20 (v1.5.7)
+- YouTube / Vimeo / X / Twitch / SoundCloud / Reddit / ~1500 сайтов.
+- `GET /api/yt-dlp/info?url=...` — метаданные (без скачивания).
+- `POST /api/yt-dlp {url, language?, provider?, model?}` — SSE: info →
+  downloading (0-100%) → transcribing (0-100%) → done.
+- `tools/yt_dlp.py` обёртка с FFmpegExtractAudio → WAV. ANSI-коды в ошибках стрипаются.
+- Зависимость: `pip install yt-dlp`.
+
+### 🔊 Системный звук / loopback (v1.5.7)
+- **Статус:** ✅ сделано 2026-08-20 (v1.5.7)
+- Захват того, что играет в колонках/наушниках через `soundcard` (Windows WASAPI
+  / macOS BlackHole / Linux PulseAudio monitor).
+- `GET /api/system-audio/devices` → список loopback-устройств.
+- `POST /api/system-audio/start {device_id}` → запуск (16kHz mono, 100ms чанки).
+- `POST /api/system-audio/stop {save_to?}` → SSE: info → done (транскрибированный
+  результат). Single-instance lock.
+- Зависимость: `pip install soundcard`.
+
+### 🆕 Real self-update (v1.5.8)
+- **Статус:** ✅ сделано 2026-08-20 (v1.5.8)
+- Persistent state в `data/update_state.json` (atomic write + RLock).
+- Endpoints: `GET /api/updates/state`, `POST /api/updates/{check-now,dismiss,apply}`.
+- Background scheduler (`_update_scheduler()`) проверяет обновления каждые
+  `update_check_interval_hours` (default 6, минимум 1). Если `auto_update_app=true`
+  → auto-apply + restart через `os.execv`.
+- UI banner `#updateBanner` (gradient teal-blue) с polling каждые 30с.
+- 10/10 unit-тестов в `tests/test_update_state.py` покрывают state machine
+  (atomic write, should_notify, dismissed reset на новую версию, mark_applied failures).
+
 ### 📱 Telegram-бот
 - **Статус:** идея · **Оценка:** крупная фича
 - Голосовые сообщения (`ogg`/`opus`) и аудиофайлы из чатов → расшифровка через
@@ -139,10 +177,17 @@
   Отделить тексты от разметки (сейчас — инлайн в `index.html`).
 
 ### 🔄 Довести `auto_update_app` до конца
-- **Статус:** идея · **Оценка:** малая
-- Ключ уже есть в конфиге и UI (`/api/updates/app`), но фонового автоприменения
-  нет: при `auto_update_app=true` и найденном обновлении — сам `git pull` +
-  `pip upgrade` с уведомлением и предложением перезапуска.
+- **Статус:** ✅ сделано 2026-08-20 (v1.5.8)
+- Persistent state, background scheduler, UI banner, atomic apply, restart через
+  `os.execv`. Подробности — в `docs/API.md` (раздел Self-update) и `docs/ARCHITECTURE.md`.
+
+### 🆕 Portable Windows .exe (v1.6) — в планах
+- **Статус:** 💭 идея
+- `autrau-desktop/` — Electron + PyInstaller обёртка (см. `C:\obsidian\04_Knowledge\projects\autrau\v1.6-tauri-plan.md`).
+- Нативное окно поверх всех приложений, глобальный хоткей (работает вне браузера), system tray.
+- System-wide вставка текста (`enigo` или `@nut-tree/nut-js`) вместо browser-only Selection API.
+- Dictation indicator как **отдельный webview** (не DOM overlay) — survives при свёрнутом главном окне.
+- Решение: **Electron** вместо Tauri (Node уже есть, не нужно 5 ГБ Rust + MSVC).
 
 ## Не входит в планы (non-goals)
 

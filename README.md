@@ -31,10 +31,14 @@
 - ⭐ **Избранное** — помеченные расшифровки никогда не удаляются авто-очисткой
 - 🗑 **Bulk-удаление** — чекбокс «Выбрать все» в обеих секциях (файлы + голосовые заметки)
 - 🎬 **Видео тоже работает** — mp4/mkv/mov/avi/webm: звук извлекается автоматически через ffmpeg
-- 🔄 **Авто-обновления** — проверка новых коммитов приложения и новых версий **только скачанных** моделей
+- 🔄 **Авто-обновления** (v1.5.8) — проверка новых коммитов + авто-apply через `git pull --ff-only` + `pip install -U`. По умолчанию **выключено** (opt-in в шестерёнке → «Автоматически обновлять приложение»). При включении — сервер сам обновляется и перезапускается через `os.execv`. Баннер «🎉 Доступно обновление» в UI для ручного apply.
 - 🧹 **Авто-очистка расшифровок** — старые расшифровки удаляются автоматически по возрасту (или вручную)
 - 🗂 **Архив расшифровок** — каждая расшифровка сохраняется в `data/transcripts/`; голосовые заметки — в `data/voice-memos/` (отдельный таб в UI); в обоих разделах — чекбоксы, bulk-удаление, кнопка «Открыть папку». Избранные (★) никогда не удаляются авто-очисткой.
 - 🖥 **Web UI** — без сборщиков, один `index.html`; drag-and-drop, тёмная тема
+- 💻 **CLI** (v1.5.7) — `python -m autrau.cli transcribe|batch|providers|models|status|health` — используй autrau из терминала, в скриптах, или через `python -m autrau.cli batch ./audio/`
+- 🔗 **URL → транскрипция** (v1.5.7) — вставь YouTube / Vimeo / Twitter / 1500+ других URL → yt-dlp скачает аудио → autrau расшифрует. UI: collapsible «🔗 Или вставьте URL» в секции загрузки
+- 🔊 **Системный звук** (v1.5.7) — захват того что играет в колонках (Windows WASAPI loopback): YouTube, Zoom, любой аудио в системе → расшифровка. UI: «🔊 Или захватить системный звук»
+- 📤 **Экспорт субтитров** (v1.5.6) — SRT / VTT / JSON / TXT из каждой расшифровки. Использует sidecar `<name>.segments.json` с таймкодами от ASR. Кнопка «📤 Экспорт ▾» в карточке результата.
 
 ---
 
@@ -95,17 +99,54 @@ py -3.13 -c "from argostranslate import package; package.update_package_index();
 
 У видео звук извлекается автоматически (ffmpeg → 16 кГц моно wav); в статусе появится «🎬 извлекаю звук из видео …».
 
+**Через CLI** (v1.5.7+, тот же сервер):
+
+```powershell
+# Один файл
+.\.venv\Scripts\python.exe -m autrau.cli transcribe data\test_ru.mp3 --output out.txt
+
+# Пакетная обработка директории
+.\.venv\Scripts\python.exe -m autrau.cli batch data\ --pattern "*.{mp3,wav}" --output .\out\
+
+# Список провайдеров / моделей
+.\.venv\Scripts\python.exe -m autrau.cli providers
+.\.venv\Scripts\python.exe -m autrau.cli models --provider parakeet-onnx
+
+# Статус / проверка
+.\.venv\Scripts\python.exe -m autrau.cli status
+.\.venv\Scripts\python.exe -m autrau.cli health
+```
+
 Или через API:
 
 ```powershell
 # Транскрибация (SSE-поток)
 curl -N -F "file=@speech.mp3" -F "language=ru" http://127.0.0.1:8000/transcribe
 
+# Из URL (YouTube/Vimeo/Twitter через yt-dlp)
+curl -N -X POST -H "Content-Type: application/json" `
+  -d '{"url": "https://www.youtube.com/watch?v=..."}' `
+  http://127.0.0.1:8000/api/yt-dlp
+
+# Системный звук (loopback)
+curl -X POST -H "Content-Type: application/json" -d '{"device_id": 0}' http://127.0.0.1:8000/api/system-audio/start
+# ... подождать 10 сек ...
+curl -X POST -H "Content-Type: application/json" -d '{"save_to": "voice-memos"}' http://127.0.0.1:8000/api/system-audio/stop
+
+# Экспорт SRT/VTT/JSON
+curl "http://127.0.0.1:8000/api/transcripts/2026-08-19_voice.mp3.txt/export?format=srt" -o subtitles.srt
+
 # Список провайдеров и моделей
 curl http://127.0.0.1:8000/api/providers
 
-# Проверка обновлений приложения и моделей (SSE-прогресс)
-curl -N "http://127.0.0.1:8000/api/updates?stream=1"
+# Состояние обновлений
+curl http://127.0.0.1:8000/api/updates/state
+
+# Применить обновление
+curl -X POST http://127.0.0.1:8000/api/updates/apply
+
+# Swagger UI (auto-generated docs)
+# Откройте http://127.0.0.1:8000/docs
 ```
 
 После транскрибации расшифровка автоматически сохраняется в `data/transcripts/` — файл `<дата>_<время>_<имя>.txt` с шапкой (файл, дата, модель, язык).
@@ -151,6 +192,10 @@ update.bat
 autrau/
 ├── server.py              # FastAPI — API + раздача UI (единственный процесс)
 ├── index.html             # Web UI (без сборщиков)
+├── autrau/                # package shim (v1.5.7): `python -m autrau` → server.py
+│   ├── __init__.py         # version
+│   ├── __main__.py         # запускает server.py
+│   └── cli.py              # re-export tools.cli (`python -m autrau.cli`)
 ├── providers/
 │   ├── base.py            # Provider ABC + реестр (registry)
 │   ├── faster_whisper.py  # CTranslate2 (по умолчанию)
@@ -161,14 +206,21 @@ autrau/
 │   ├── config.py          # persistent user config (data/config.json)
 │   ├── check.py           # диагностика (python -m tools.check)
 │   ├── update.py          # self + model update (python -m tools.update)
-│   ├── cleanup.py         # авто-очистка расшифровок
-│   └── translation.py     # провайдеры перевода (Argos/LibreTranslate/MiniMax)
+│   ├── update_state.py    # persistent state для auto-update (v1.5.8)
+│   ├── cleanup.py         # авто-очистка расшифровок + sidecar .segments.json
+│   ├── translation.py     # провайдеры перевода (Argos/LibreTranslate/MiniMax)
+│   ├── cli.py             # CLI: transcribe, batch, providers, models, status, health
+│   ├── yt_dlp.py          # YouTube/Vimeo/etc → аудио (v1.5.7)
+│   ├── system_audio.py    # WASAPI loopback — захват системного звука (v1.5.7)
+│   └── exports.py         # SRT/VTT/JSON/TXT форматтеры из segments (v1.5.6)
 ├── data/                  # локальные данные (в .gitignore)
 │   ├── config.json        # конфигурация
-│   ├── transcripts/       # архив расшифровок
-│   ├── voice-memos/       # голосовые заметки (отдельный таб в UI)
-│   └── models/            # скачанные модели whisper-cpp
+│   ├── update_state.json  # v1.5.8 — last_check / available / dismissed_version
+│   ├── transcripts/       # архив расшифровок (+ .segments.json sidecars)
+│   ├── voice-memos/       # голосовые заметки (+ .segments.json sidecars)
+│   └── models/            # скачанные модели whisper-cpp / parakeet
 ├── docs/                  # документация
+├── tests/                 # локальные тесты (gitignored)
 ├── start.bat              # 1-click запуск (Windows)
 ├── update.bat             # self-update (Windows)
 ├── publish.bat            # публикация в GitHub
@@ -239,12 +291,16 @@ autrau/
 | Метод | Путь | Описание |
 |---|---|---|
 | `GET` | `/` | Web UI |
+| `GET` | `/docs` | **Swagger UI** (auto-generated OpenAPI) |
+| `GET` | `/openapi.json` | OpenAPI schema (JSON) |
 | `GET` | `/health` | статус сервера |
 | `GET` | `/api/providers` | провайдеры + модели + активные |
 | `GET` | `/api/config` | текущая конфигурация |
 | `POST` | `/api/config` | обновить конфигурацию |
 | `POST` | `/api/cleanup` | очистить расшифровки старше N дней |
 | `GET` | `/api/transcripts` | список расшифровок + флаги избранного + `has_translation` |
+| `GET` | `/api/transcripts/{name}` | скачать/открыть один `.txt` |
+| `GET` | `/api/transcripts/{name}/export?format=srt\|vtt\|json\|txt` | **v1.5.6** экспорт с таймкодами |
 | `POST` | `/api/favorites` | пометить/снять избранное (защита от авто-очистки) |
 | `GET/DELETE` | `/api/voice-memos` | список/удаление голосовых заметок (`data/voice-memos/`) |
 | `POST` | `/api/voice/{start,chunk,stop}` | запись голоса (MediaRecorder → ffmpeg → транскрипция) |
@@ -252,7 +308,16 @@ autrau/
 | `GET` | `/api/translate/providers` | статус каждого провайдера перевода |
 | `POST` | `/api/translate/install-argos` | установить Argos + en_ru/ru_en модели в фоне |
 | `GET` | `/api/updates` | проверка обновлений (`?stream=1` — SSE) |
-| `POST` | `/api/updates/app` | self-update (git pull + pip upgrade) |
+| `POST` | `/api/updates/app` | self-update (git pull + pip upgrade) — DEPRECATED → use `/api/updates/apply` |
+| `GET` | `/api/updates/state` | **v1.5.8** persistent state + should_notify + auto_update_enabled |
+| `POST` | `/api/updates/check-now` | **v1.5.8** force check (обновляет state) |
+| `POST` | `/api/updates/dismiss` | **v1.5.8** dismiss banner для текущей latest_version |
+| `POST` | `/api/updates/apply` | **v1.5.8** apply update (git pull + pip upgrade; restart если `auto_update_app=true`) |
+| `GET` | `/api/yt-dlp/info?url=...` | **v1.5.7** метаданные URL (title/duration/thumbnail) |
+| `POST` | `/api/yt-dlp` | **v1.5.7** URL → аудио → транскрипция (SSE) |
+| `GET` | `/api/system-audio/devices` | **v1.5.7** список loopback-устройств |
+| `POST` | `/api/system-audio/start` | **v1.5.7** начать захват системного звука |
+| `POST` | `/api/system-audio/stop` | **v1.5.7** стоп + транскрипция (SSE) |
 | `POST` | `/api/model/download` | скачать модель (SSE) |
 | `GET` | `/api/model/check` | проверить обновление одной модели |
 | `POST` | `/api/provider/load` | вручную прогреть модель в память (UI сам лениво грузит при первой расшифровке) |

@@ -15,15 +15,17 @@
 
 - Python ≥ 3.10; приоритет — стандартная библиотека, тяжёлые зависимости только там, где они реально нужны.
 - Форматтер/линтер в проекте не настроены — следуйте PEP 8 и стилю соседних файлов.
-- Обязательная проверка: `python -m compileall -q providers tools server.py` — её гоняет CI на каждый PR (плюс валидность всех JSON-файлов).
+- Обязательная проверка: `python -m compileall -q providers tools server.py autrau` — её гоняет CI на каждый PR (плюс валидность всех JSON-файлов).
 - Пользовательские строки в UI и логах — на русском языке.
 - Изменения конфигурации и API — с обратной совместимостью (пример: `/api/updates` по умолчанию отдаёт JSON, а `?stream=1` — SSE).
+- **Тесты для stateful-логики обязательны** (v1.5.8+): если добавляете state, persistence, thread-safety — добавьте unit-тест в `tests/test_*.py` (gitignored, шаблон — `tests/test_update_state.py` с `tempfile.TemporaryDirectory()` и `pytest`-style assertions).
+- **CLI subcommands** (v1.5.7+): если добавляете новую команду в `python -m autrau.cli`, добавьте argparse parser, docstring, и `set_defaults(func=...)`. Команда должна работать через запущенный server (urllib, не requests — минимум deps).
 
 ## Правила pull request
 
 - Работайте в отдельной ветке с осмысленным именем (`fix/...`, `feat/...`, `docs/...`), основной веткой является `main`.
 - Коммиты — небольшие, с описательными сообщениями; в одном PR — одна задача.
-- Перед PR обязательно: `python -m compileall -q providers tools server.py`, smoke-тест сервера (`/health`, `/api/providers`, транскрибация тестового файла).
+- Перед PR обязательно: `python -m compileall -q providers tools server.py autrau`, smoke-тест сервера (`/health`, `/api/providers`, транскрибация тестового файла). Если добавили unit-тесты — `python -m pytest tests/ -v` (на v1.5.8: 10/10 в `tests/test_update_state.py` должен проходить).
 - В описании PR укажите: что меняется, зачем, как проверить.
 - Дождитесь зелёного CI.
 - Если меняете провайдеров или модели — обновите соответствующие разделы `README.md` и `docs/`.
