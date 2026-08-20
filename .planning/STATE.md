@@ -11,12 +11,12 @@ next_milestone: v1.6
 next_milestone_plan: "Tauri/Electron wrapper (portable .exe) — DEFERRED, plan in C:\\obsidian"
 ---
 
-# State — v1.7 (Telegram agent bot) ✅ COMPLETE
+# State — v1.7.1 (Telegram agent bot — QA-фокус) ✅ COMPLETE
 
 ## Current Position
 
-**Milestone:** v1.7 «Telegram agent bot» ✅ DONE (2026-08-20)
-**Phase:** 7 — shipped in single commit
+**Milestone:** v1.7.1 «Telegram agent bot + /diag /logs /test /update apply» ✅ DONE (2026-08-20)
+**Phase:** 7 (extended)
 **Plan:** `.planning/phases/7-telegram-bot/PLAN.md`
 
 **Done ранее:**
@@ -26,7 +26,8 @@ next_milestone_plan: "Tauri/Electron wrapper (portable .exe) — DEFERRED, plan 
 - v1.5.7 Vibe-inspired (CLI / yt-dlp / system-audio / Swagger / AGENTS) ✅
 - v1.5.8 Real auto-update ✅
 - gsd-docs-update (v1.5.7+v1.5.8 docs coverage) ✅
-- **v1.7 Telegram agent bot** ✅ (новое)
+- **v1.7 Telegram agent bot** ✅ — 11 команд, voice/audio, agent-mode /ask
+- **v1.7.1 QA-фокус** ✅ — добавлены `/diag /logs /test /update apply`, 13 FAQ-паттернов
 
 **Next action:** v1.6 Tauri/Electron wrapper (отложен) или отдых
 

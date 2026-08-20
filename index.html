@@ -1057,17 +1057,22 @@
         </div>
       </div>
 
-      <!-- Telegram agent bot (v1.7) -->
+      <!-- Telegram agent bot (v1.7.1) -->
       <div class="row" style="margin-top: 18px;">
         <div style="flex: 1 1 100%; max-width: 460px; padding: 12px 14px; background:rgba(110, 231, 183, 0.06); border:1px solid var(--border); border-radius:8px;">
           <div style="display:flex; align-items:center; gap:8px; font-weight:600;">
             <span style="font-size:18px;">📱</span>
-            <span>Telegram agent bot <span class="small" style="opacity:.6;">(v1.7)</span></span>
+            <span>Telegram agent bot <span class="small" style="opacity:.6;">(v1.7.1)</span></span>
           </div>
           <div class="small" style="margin-top:6px; opacity:.85;">
             Отдельный процесс (<code>start_telegram_bot.bat</code>). Голосовые и аудио из чата
-            → авто-расшифровка + EN-перевод. Команды: <code>/help</code>, <code>/status</code>,
-            <code>/providers</code>, <code>/check</code>, <code>/update</code>, <code>/ask &lt;вопрос&gt;</code>.
+            → авто-расшифровка + EN-перевод. 14 команд: <code>/start /help /status /providers /config /lang /favorites /export /check /diag /logs /test /update /ask</code>.
+          </div>
+          <div class="small" style="margin-top:6px; opacity:.75;">
+            QA/тест-команды: <code>/test [provider]</code> — реальная транскрипция
+            <code>data/test_ru.mp3</code> с отчётом; <code>/logs [N] [err]</code> — хвост серверного лога;
+            <code>/diag &lt;component&gt;</code> — granular диагностика
+            (python/ffmpeg/git/deps/providers/updates).
           </div>
           <div class="small" style="margin-top:6px; opacity:.75;">
             Токен: <code>data/config.json → telegram_bot_token</code> (получить у <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>).

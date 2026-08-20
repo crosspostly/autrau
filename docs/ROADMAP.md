@@ -117,23 +117,26 @@
   (atomic write, should_notify, dismissed reset на новую версию, mark_applied failures).
 
 ### 📱 Telegram agent bot (v1.7)
-- **Статус:** ✅ сделано 2026-08-20
+- **Статус:** ✅ сделано 2026-08-20 (v1.7 + v1.7.1: `/diag /logs /test /update apply`)
 - `tools/telegram_bot.py` + `start_telegram_bot.bat` — отдельный процесс,
   использует `python-telegram-bot` v21.11. Голосовые и аудио из чата
   → скачивает (через Telegram Bot API, до 20 МБ) → ffmpeg ogg→wav (если есть)
   → `POST /transcribe` → ответ + EN-перевод.
-- **Команды:** `/start`, `/help`, `/status`, `/providers`, `/config`, `/lang ru|en|auto`,
-  `/favorites`, `/export srt|vtt|json|txt`, `/check` (полная диагностика через
-  `tools.check`), `/update` (проверка обновлений), `/ask <вопрос>` (agent-режим).
-- **Agent-режим:** эвристический FAQ (9 паттернов: argos / parakeet / youtube /
-  system audio / slow / not working / update / video / provider switch) +
-  предложение `/check` если не распознал. Freeform-вопросы с `?` или вопросительными
-  словами автоматически роутятся в `/ask`.
+- **14 команд:** `/start`, `/help`, `/status`, `/providers`, `/config`, `/lang`,
+  `/favorites`, `/export srt|vtt|json|txt`, `/check`, `/diag <component>`,
+  `/logs [N] [err]`, `/test [provider] [lang]`, `/update [apply]`, `/ask <вопрос>`.
+- **v1.7.1 QA-фокус:** `/test` запускает реальную транскрипцию `data/test_ru.mp3`
+  с отчётом (время, символы/сек, файл, текст), `/diag` — granular по компоненту,
+  `/logs` — хвост `autrau-server.out.log` для дебага, `/update apply` — реально
+  применить обновление + перезапустить сервер.
+- **Agent-режим:** 13 FAQ-паттернов (9 базовых + 4 v1.7.1: logs / test / diag /
+  restart) + freeform-роутинг вопросительных сообщений в `/ask`.
 - **Безопасность:** `telegram_allowed_chat_ids` whitelist (пустой = блок всех,
   `any` = пропустить всех, список = whitelist, CSV-строка = whitelist). По умолчанию
-  никого не пускает — нужно явно добавить свой chat_id.
-- **Тесты:** 19/19 в `tests/test_telegram_bot.py` (FAQ patterns, ChatState,
-  allowed_chat, html_escape, split_text, AutrauAPI error handling).
+  никого не пускает.
+- **Тесты:** 32/32 в `tests/test_telegram_bot.py` (FAQ patterns, ChatState,
+  allowed_chat, html_escape, split_text, AutrauAPI error handling, log reader,
+  diag formatters, env override).
 - **Запуск:** `pip install 'python-telegram-bot>=20.0,<22.0'`, получить токен
   через [@BotFather](https://t.me/BotFather), положить в `data/config.json`
   → `telegram_bot_token`, добавить свой chat_id в `telegram_allowed_chat_ids`,

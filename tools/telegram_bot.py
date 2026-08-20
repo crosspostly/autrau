@@ -1,12 +1,17 @@
-"""Telegram agent bot for Autrau (v1.7).
+"""Telegram agent bot for Autrau (v1.7.1).
 
 Запуск:
     .\\.venv\\Scripts\\python.exe -m tools.telegram_bot
 
 Что умеет:
 - Голосовые сообщения и аудиофайлы → авто-транскрипция через autrau API
-- Команды: /start, /help, /status, /providers, /lang, /favorites, /export, /check, /update, /ask
+- Команды: /start, /help, /status, /providers, /lang, /favorites, /export, /check, /diag,
+           /logs, /test, /update [apply], /ask
 - "Агент" режим: freeform-вопросы → диагностика, объяснения, тесты (через tools.check + config)
+- /diag — granular: python / ffmpeg / git / deps / providers / updates
+- /logs — последние N строк autrau-server.out.log (для дебага)
+- /test — реальная транскрипция data/test_ru.mp3 с активным провайдером (QA)
+- /update apply — реально применить обновление (git pull + pip + restart)
 
 Конфиг в data/config.json:
     telegram_bot_token:        токен от @BotFather
@@ -77,10 +82,12 @@ class ChatState:
     last_text: str = ""
     last_translation: str = ""
     consecutive_failures: int = 0
+    last_issue: str = ""             # для context-aware /ask
 
 
 _STATES: dict[int, ChatState] = {}
 _API_URL = "http://127.0.0.1:8000"
+_LOG_FILE = PROJECT_ROOT / "autrau-server.out.log"
 _MAX_AUDIO_MB = 20  # Telegram Bot API limit is 20MB per file download
 
 
@@ -308,19 +315,23 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "<b>Команды Autrau-бота</b>\n\n"
         "/start — приветствие и состояние\n"
         "/help — эта справка\n"
-        "/status — здоровье autrau-сервера\n"
+        "/status — здоровье autrau-сервера + обновления\n"
         "/providers — какие ASR-провайдеры доступны\n"
         "/config — текущая конфигурация\n"
         "/lang ru|en|auto — установить язык распознавания\n"
         "/favorites — последние избранные расшифровки\n"
         "/export srt|vtt|json|txt — экспорт последней расшифровки\n"
         "/check — полная диагностика (Python, ffmpeg, git, провайдеры)\n"
-        "/update — проверить обновления приложения\n"
+        "/diag <component> — granular: python|ffmpeg|git|deps|providers|updates|all\n"
+        "/logs [N] [err] — последние N строк лога сервера (default 20)\n"
+        "/test [provider] [lang] — реальная транскрипция data/test_ru.mp3 (QA)\n"
+        "/update — проверить обновления\n"
+        "/update apply — применить обновление + restart сервера\n"
         "/ask <вопрос> — спросить что угодно по autrau (агент-режим)\n\n"
         "<b>Медиа:</b>\n"
         "  🎙 голосовое сообщение — авто-транскрипция\n"
-        "  🎵 аудиофайл (.mp3/.wav/.ogg/.m4a) — авто-транскрипция\n"
-        "  🔗 URL — скачивание через yt-dlp + транскрипция",
+        "  🎵 аудиофайл (.mp3/.wav/.ogg/.m4a) — авто-транскрипция\n\n"
+        "<b>Совет:</b> «почему не работает?» → <code>/check</code>, «как установить X?» → <code>/ask</code>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -490,6 +501,12 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not allowed_chat(update.effective_chat.id):
         return
+    args = context.args or []
+    # /update apply → реально применить
+    if args and args[0].lower() in ("apply", "install", "now"):
+        await _do_apply_update(update)
+        return
+    # /update — статус
     code, body = api()._request("/api/updates/state")
     if code != 200 or not isinstance(body, dict):
         await update.message.reply_text("❌ Не могу получить /api/updates/state")
@@ -498,7 +515,7 @@ async def cmd_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(
             f"🆕 Доступно обновление: <code>{body['latest_version']}</code>\n"
             f"Сейчас: <code>{body['current_version']}</code>\n\n"
-            f"Применить: <code>update.bat</code> или в UI вкладка «🔄 Обновления».",
+            f"Применить: <code>/update apply</code> или <code>update.bat</code>.",
             parse_mode=ParseMode.HTML,
         )
     else:
@@ -506,6 +523,243 @@ async def cmd_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             f"✅ Уже актуальная версия: <code>{body.get('current_version', '?')}</code>",
             parse_mode=ParseMode.HTML,
         )
+
+
+async def _do_apply_update(update: Update) -> None:
+    """Apply pending update — this restarts the server via os.execv. Bot survives (separate process)."""
+    msg = await update.message.reply_text("⏳ Применяю обновление (git pull + pip upgrade + restart)…")
+    # Use a thread to not block the event loop on the long HTTP request
+    import asyncio
+    loop = asyncio.get_event_loop()
+    try:
+        code, body = await loop.run_in_executor(
+            None, lambda: api()._request("/api/updates/apply", method="POST", timeout=300)
+        )
+    except Exception as e:
+        await msg.edit_text(f"❌ Ошибка apply: {e}")
+        return
+    if code == 200 and isinstance(body, dict):
+        result = body.get("result", "?")
+        if result == "ok":
+            await msg.edit_text(
+                f"✅ Обновление применено: <code>{body.get('version', '?')}</code>\n"
+                f"🔄 Сервер перезапускается… подождите ~10 сек и /status.",
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await msg.edit_text(f"⚠ Apply result: <code>{result}</code>", parse_mode=ParseMode.HTML)
+    else:
+        await msg.edit_text(f"❌ Apply failed: HTTP {code}\n{body if isinstance(body, str) else 'binary'}")
+
+
+# ---- v1.7.1 new commands ----
+
+# Map for /diag
+_DIAG_COMPONENTS = ("python", "ffmpeg", "git", "deps", "providers", "updates")
+
+
+async def cmd_diag(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/diag <component> — granular check (python/ffmpeg/git/deps/providers/updates)."""
+    if not allowed_chat(update.effective_chat.id):
+        return
+    args = context.args or []
+    if not args:
+        await update.message.reply_text(
+            f"🔬 Использование: <code>/diag {' | '.join(_DIAG_COMPONENTS)}</code>\n"
+            f"Или <code>/diag all</code> — все сразу.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    target = args[0].lower()
+    if target not in _DIAG_COMPONENTS and target != "all":
+        await update.message.reply_text(
+            f"⚠ Не знаю «{target}». Доступно: <code>{', '.join(_DIAG_COMPONENTS)}</code>, <code>all</code>.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    components = _DIAG_COMPONENTS if target == "all" else (target,)
+    await update.message.reply_text(f"🔬 Запускаю {', '.join(components)}…")
+    # Inline call to specific check functions
+    lines = []
+    for comp in components:
+        if comp == "python":
+            lines.append(_fmt_python())
+        elif comp == "ffmpeg":
+            lines.append(_fmt_ffmpeg())
+        elif comp == "git":
+            lines.append(_fmt_git())
+        elif comp == "deps":
+            lines.append(_fmt_deps())
+        elif comp == "providers":
+            lines.append(_fmt_providers())
+        elif comp == "updates":
+            lines.append(_fmt_updates())
+    text = "🔬 <b>Diag</b>\n\n" + "\n".join(lines)
+    for chunk in split_text(text):
+        await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
+
+
+def _fmt_python() -> str:
+    r = check._check_python()
+    return f"  Python {r['version']}: {'✅' if r['ok'] else '❌ ' + r.get('hint', '')}\n"
+
+
+def _fmt_ffmpeg() -> str:
+    r = check._check_ffmpeg()
+    if r["ok"]:
+        return f"  ffmpeg: ✅ ({r['version'][:60]})\n"
+    return f"  ffmpeg: ❌ {r.get('hint', '')}\n"
+
+
+def _fmt_git() -> str:
+    r = check._check_git()
+    if r["ok"]:
+        return f"  git: ✅ branch={r['branch']} dirty={r.get('dirty')}\n"
+    return f"  git: ❌ {r.get('hint', '')}\n"
+
+
+def _fmt_deps() -> str:
+    r = check._check_deps()
+    if r["ok"]:
+        return "  deps: ✅ все обязательные модули\n"
+    return f"  deps: ❌ отсутствуют: {', '.join(r.get('missing', []))}\n  → {r.get('hint', '')}\n"
+
+
+def _fmt_providers() -> str:
+    items = check._check_providers()
+    out = ["  providers:\n"]
+    for p in items:
+        st = "✅" if p["installed"] else "❌"
+        out.append(f"    {st} {p['display']}\n")
+        if not p["installed"]:
+            out.append(f"      ↳ {p['reason']}\n")
+    return "".join(out)
+
+
+def _fmt_updates() -> str:
+    try:
+        cur = upd.current_version()
+        lat = upd.latest_version()
+        if cur == "unknown" or lat is None:
+            return "  updates: ❓ не git-repo или нет origin\n"
+        if cur == lat:
+            return f"  updates: ✅ current={cur} = latest\n"
+        return f"  updates: 🆕 current={cur} <code>{cur}</code> → latest=<code>{lat}</code>\n  → <code>/update apply</code>\n"
+    except Exception as e:
+        return f"  updates: ❌ {e}\n"
+
+
+def _read_server_logs(n: int = 20, channel: str = "out") -> str:
+    """Read last n lines of autrau-server.out.log or .err.log."""
+    fname = "autrau-server.out.log" if channel == "out" else "autrau-server.err.log"
+    path = PROJECT_ROOT / fname
+    if not path.exists():
+        return f"❌ {fname} не найден."
+    try:
+        # Use deque for memory-efficient tail
+        from collections import deque
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            last = deque(f, maxlen=max(1, n))
+        return "".join(last).rstrip()
+    except Exception as e:
+        return f"❌ Ошибка чтения {fname}: {e}"
+
+
+async def cmd_logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/logs [N] [err] — последние N строк autrau-server.out.log (по умолчанию 20)."""
+    if not allowed_chat(update.effective_chat.id):
+        return
+    args = context.args or []
+    n = 20
+    channel = "out"
+    for a in args:
+        al = a.lower()
+        if al == "err":
+            channel = "err"
+        elif al.isdigit():
+            n = max(1, min(200, int(al)))
+    text = _read_server_logs(n, channel)
+    fname = "autrau-server.out.log" if channel == "out" else "autrau-server.err.log"
+    head = f"📜 <b>Последние {n} строк {fname}</b>\n\n<pre>"
+    tail = "</pre>"
+    full = head + html_escape(text) + tail
+    for chunk in split_text(full):
+        await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
+
+
+async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/test [provider] [lang] — реальная транскрипция data/test_ru.mp3 (QA helper)."""
+    if not allowed_chat(update.effective_chat.id):
+        return
+    args = context.args or []
+    test_file = PROJECT_ROOT / "data" / "test_ru.mp3"
+    if not test_file.exists():
+        await update.message.reply_text(
+            f"❌ <code>{test_file.name}</code> не найден. Скопируйте любой mp3 в <code>data/</code>.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    provider = args[0] if args else None
+    lang = args[1] if len(args) > 1 else "ru"
+
+    # If provider given, switch first
+    if provider:
+        cfg_now = api().config() or {}
+        if cfg_now.get("provider") != provider:
+            await update.message.reply_text(f"⏳ Переключаю на <code>{provider}</code>…")
+            code, body = api()._request(
+                "/api/config", method="POST", json_body={"provider": provider}, timeout=10
+            )
+            if code != 200:
+                await update.message.reply_text(f"❌ Не могу переключить провайдера: {code}")
+                return
+            # Also trigger load
+            api()._request("/api/provider/load", method="POST", json_body={}, timeout=600)
+
+    msg = await update.message.reply_text(f"🧪 Тест: <code>{test_file.name}</code>…")
+    import asyncio
+    loop = asyncio.get_event_loop()
+    t0 = time.time()
+    try:
+        result = await loop.run_in_executor(
+            None, lambda: api().transcribe(test_file, language=lang, on_progress=None)
+        )
+    except Exception as e:
+        await msg.edit_text(f"❌ Ошибка: {e}")
+        return
+    elapsed = time.time() - t0
+
+    if not result or result.get("error"):
+        err = (result or {}).get("error", "unknown")
+        st = get_state(update.effective_chat.id)
+        st.last_issue = f"test failed: {err}"
+        await msg.edit_text(
+            f"❌ <b>Тест провалился</b> ({elapsed:.1f}s)\n"
+            f"<code>{html_escape(str(err)[:300])}</code>\n\n"
+            f"💡 Попробуй:\n"
+            f"  <code>/diag providers</code> — что установлено\n"
+            f"  <code>/logs 30</code> — последние логи\n"
+            f"  <code>/check</code> — полная диагностика",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    text = result.get("text", "").strip()
+    info = result.get("info", {})
+    fname = result.get("file", "?")
+    chars = len(text)
+    rate = chars / max(0.1, elapsed)
+    st = get_state(update.effective_chat.id)
+    st.last_file = fname
+    st.last_text = text
+    st.last_translation = result.get("translation", "").strip()
+    await msg.edit_text(
+        f"✅ <b>Тест OK</b> ({elapsed:.1f}s, {chars} chars, {rate:.0f} chars/s)\n\n"
+        f"  Provider: <code>{info.get('provider', '?')}</code> / <code>{info.get('model', '?')}</code>\n"
+        f"  Lang: <code>{info.get('language', '?')}</code>, duration: {info.get('duration', 0):.1f}s\n"
+        f"  File: <code>{html_escape(fname)}</code>\n\n"
+        f"📝 <b>Текст:</b>\n{html_escape(text[:400])}",
+        parse_mode=ParseMode.HTML,
+    )
 
 
 # ---- agent mode ----
@@ -540,25 +794,58 @@ FAQ = [
      "  3. beam_size: 5 → 1 (быстрее, точность -2%)\n"
      "  4. compute_type: auto → int8 (на CPU быстрее)\n\n"
      "Покажи текущую конфигурацию: <code>/config</code>"),
-    (r"(не\s+работает|не\s+транскрибирует|error|ошибка|fail)",
+    (r"(не\s+работает|не\s+транскрибирует|error|ошибка|fail|не\s+получается)",
      "❌ Не работает? Попробуй:\n\n"
      "  1. <code>/check</code> — диагностика (Python, ffmpeg, провайдеры)\n"
      "  2. <code>/status</code> — состояние сервера\n"
      "  3. <code>/providers</code> — какие ASR доступны\n"
-     "  4. Если провайдер <code>installed=false</code> — поставь через UI\n"
-     "  5. <code>autrau-server.out.log</code> — последние 30 строк содержат подсказку"),
+     "  4. <code>/diag providers</code> — почему провайдер не установлен\n"
+     "  5. <code>/logs 30</code> — последние 30 строк серверного лога\n"
+     "  6. <code>/test</code> — прогнать тест с активным провайдером\n"
+     "  7. <code>autrau-server.out.log</code> — файл с подсказками"),
     (r"(обнов|update|новая версия|version)",
      "🔄 Обновления:\n\n"
-     "  • <code>/update</code> — проверить\n"
-     "  • Применить: <code>update.bat</code> (git pull + pip upgrade)\n"
+     "  • <code>/update</code> — проверить (показывает есть ли новая версия)\n"
+     "  • <code>/update apply</code> — реально применить (git pull + pip upgrade + restart)\n"
+     "  • <code>update.bat</code> — то же самое вручную\n"
      "  • Auto-update: в UI шестерёнка → «Автоматически обновлять приложение»"),
     (r"(ffmpeg|видео|video|mp4|mkv)",
      "🎬 Видео (mp4/mkv/mov): autrau автоматически извлечёт аудио через ffmpeg.\n\n"
-     "  Если не работает: <code>winget install Gyan.FFmpeg</code> и перезапустите терминал."),
+     "  Если не работает: <code>winget install Gyan.FFmpeg</code> и перезапустите терминал.\n"
+     "  Проверить: <code>/diag ffmpeg</code>"),
     (r"(провайдер|provider|модель|model).*(выбрать|switch|сменить|change)",
      "🎛 Смена провайдера/модели:\n\n"
      "  • UI: верхняя панель → «Провайдер/Модель»\n"
-     "  • API: <code>POST /api/config {\"provider\": \"parakeet-onnx\", \"model\": \"parakeet-tdt-0.6b-v3\"}</code>"),
+     "  • API: <code>POST /api/config {\"provider\": \"parakeet-onnx\", \"model\": \"parakeet-tdt-0.6b-v3\"}</code>\n"
+     "  • Проверить доступные: <code>/providers</code>\n"
+     "  • Тест с провайдером: <code>/test parakeet-onnx</code>"),
+    (r"(лог|logs|ошибк.*в\s+лог|traceback|stack\s*trace)",
+     "📜 Логи:\n\n"
+     "  • <code>/logs 30</code> — последние 30 строк <code>autrau-server.out.log</code>\n"
+     "  • <code>/logs 50 err</code> — последние 50 строк error-лога\n"
+     "  • Файлы: <code>autrau-server.out.log</code>, <code>autrau-server.err.log</code>\n"
+     "  • Бот-лог: <code>autrau-telegram-bot.out.log</code>"),
+    (r"(тест|test|провер.*работ|smoke|smoke-test)",
+     "🧪 Тест:\n\n"
+     "  • <code>/test</code> — реальная транскрипция <code>data/test_ru.mp3</code> с активным провайдером\n"
+     "  • <code>/test faster-whisper ru</code> — с провайдером и языком\n"
+     "  • <code>/test parakeet-onnx</code> — переключить и прогнать\n"
+     "  • Показывает: время, символы/сек, файл, текст\n"
+     "  • Если падает → предложит /diag providers, /logs, /check"),
+    (r"(диаг|diag|детальн|granular|конкретн.*провер)",
+     "🔬 Granular диагностика:\n\n"
+     "  • <code>/diag python</code> — версия Python, путь\n"
+     "  • <code>/diag ffmpeg</code> — наличие и версия\n"
+     "  • <code>/diag git</code> — branch, dirty, remote\n"
+     "  • <code>/diag deps</code> — обязательные модули\n"
+     "  • <code>/diag providers</code> — все ASR и их статус\n"
+     "  • <code>/diag updates</code> — текущая vs latest commit\n"
+     "  • <code>/diag all</code> — все сразу (≈ <code>/check</code>)"),
+    (r"(restart|перезапус|рестарт)",
+     "🔄 Перезапуск сервера:\n\n"
+     "  • <code>/update apply</code> — применить обновление + restart через <code>os.execv</code>\n"
+     "  • Вручную: закройте окно start.bat и запустите заново\n"
+     "  • Бот НЕ перезапускается вместе с сервером — отдельный процесс"),
 ]
 
 
@@ -779,6 +1066,9 @@ def main() -> int:
     app.add_handler(CommandHandler("favorites", cmd_favorites))
     app.add_handler(CommandHandler("export", cmd_export))
     app.add_handler(CommandHandler("check", cmd_check))
+    app.add_handler(CommandHandler("diag", cmd_diag))
+    app.add_handler(CommandHandler("logs", cmd_logs))
+    app.add_handler(CommandHandler("test", cmd_test))
     app.add_handler(CommandHandler("update", cmd_update))
     app.add_handler(CommandHandler("ask", cmd_ask))
     # Media

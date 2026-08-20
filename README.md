@@ -178,8 +178,8 @@ pip install "python-telegram-bot>=20.0,<22.0"
 Бот как «агент для usability»:
 
 - 🎙 **Голосовое / аудио из чата** → скачивание → ffmpeg (ogg→wav) → `/transcribe` → ответ + EN-перевод
-- 📋 **Команды:** `/start`, `/help`, `/status`, `/providers`, `/config`, `/lang ru|en|auto`, `/favorites`, `/export srt|vtt|json|txt`, `/check` (диагностика), `/update` (проверка обновлений)
-- 🤖 **Агент-режим:** `/ask <вопрос>` или просто вопросительное сообщение (например «как установить argos?», «медленно работает», «не работает перевод») — бот матчит по 9 FAQ-паттернам и отвечает пошагово. Если не распознал — предлагает `/check` или `/status`.
+- 📋 **Команды:** `/start`, `/help`, `/status`, `/providers`, `/config`, `/lang ru|en|auto`, `/favorites`, `/export srt|vtt|json|txt`, `/check` (диагностика), `/diag <comp>` (granular: python/ffmpeg/git/deps/providers/updates), `/logs [N] [err]` (хвост лога сервера), `/test [provider] [lang]` (реальная транскрипция test_ru.mp3), `/update` (проверка), `/update apply` (применить)
+- 🤖 **Агент-режим:** `/ask <вопрос>` или просто вопросительное сообщение (например «как установить argos?», «медленно работает», «не работает перевод», «где логи?», «как сделать тест?») — бот матчит по 13 FAQ-паттернам и отвечает пошагово. Если не распознал — предлагает `/check`, `/diag`, `/logs` или `/status`.
 - 🔒 **Whitelist** по `chat_id` (пустой = блок всех; `"any"` = пропустить всех для dev; `[123, 456]` = whitelist). По умолчанию безопасно закрыт.
 
 Логи: `autrau-telegram-bot.out.log`.
