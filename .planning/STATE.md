@@ -11,13 +11,13 @@ next_milestone: v1.6
 next_milestone_plan: "Tauri/Electron wrapper (portable .exe) — DEFERRED, plan in C:\\obsidian"
 ---
 
-# State — v1.7.1 (Telegram agent bot — QA-фокус) ✅ COMPLETE
+# State — v1.6.0 (Electron desktop MVP) ✅ COMPLETE
 
 ## Current Position
 
-**Milestone:** v1.7.1 «Telegram agent bot + /diag /logs /test /update apply» ✅ DONE (2026-08-20)
-**Phase:** 7 (extended)
-**Plan:** `.planning/phases/7-telegram-bot/PLAN.md`
+**Milestone:** v1.6.0 «Electron desktop wrapper MVP» ✅ DONE (2026-08-20)
+**Phase:** 8 (v1.6.0 = MVP foundation)
+**Repo:** https://github.com/crosspostly/autrau-desktop (commit e50c310)
 
 **Done ранее:**
 - v1.5 milestone (Handi-like UX) ✅
@@ -28,8 +28,9 @@ next_milestone_plan: "Tauri/Electron wrapper (portable .exe) — DEFERRED, plan 
 - gsd-docs-update (v1.5.7+v1.5.8 docs coverage) ✅
 - **v1.7 Telegram agent bot** ✅ — 11 команд, voice/audio, agent-mode /ask
 - **v1.7.1 QA-фокус** ✅ — добавлены `/diag /logs /test /update apply`, 13 FAQ-паттернов
+- **v1.6.0 Electron desktop MVP** ✅ — Electron + sidecar + tray + hotkey + window
 
-**Next action:** v1.6 Tauri/Electron wrapper (отложен) или отдых
+**Next action:** v1.6.1 (PyInstaller sidecar) или v1.6.2 (polish + build pipeline)
 
 ## v1.7 new files
 

@@ -11,7 +11,7 @@
 | 5     | **Vibe-inspired (CLI/yt-dlp/audio/Swagger)** | ✅ done | v1.5.7  | 1.5 hours |
 | 6     | **Real auto-update**              | ✅ done      | v1.5.8  | 1 hour   |
 | 7     | **Telegram agent bot**            | ✅ done      | v1.7    | 1.5 hours |
-| 8     | **Tauri/Electron wrapper**        | 🔄 deferred | v1.6    | 2-3 weeks |
+| 8     | **Tauri/Electron wrapper (MVP)**  | ✅ done (MVP) | v1.6.0  | 1.5 hours (foundation) |
 
 ---
 
@@ -290,20 +290,21 @@ agent mode (9 FAQ patterns), 19/19 tests, docs + UI.
 
 ---
 
-## Phase 8 — Tauri/Electron wrapper (v1.6) 🔄 DEFERRED
+## Phase 8 — Tauri/Electron wrapper (v1.6) 🔄 v1.6.0 SHIPPED (MVP, 2026-08-20)
 
 **Goal:** Portable Windows .exe через Electron (Tauri отклонён — 5GB Rust toolchain
 ради 5-10MB savings нерентабельно). Используем паттерн vibe:
-- `autrau-desktop/` (Electron + PyInstaller sidecar)
-- Dictation indicator как **отдельный webview** (не DOM overlay)
-- system-wide вставка через `@nut-tree/nut-js` (кросс-платформенный)
+- `autrau-desktop/` (Electron + PyInstaller sidecar) — **отдельный репо** `crosspostly/autrau-desktop`
+- System tray + global hotkey `Alt+R` + frameless window
 - Real global hotkey (работает вне браузера)
+- Dev mode: спавнит Python venv из `../autrau`
+- Prod mode: спавнит PyInstaller-bundled `autrau-server.exe` из `resources/`
 
-**Зачем:** настоящий Handy-style UX, не зависит от открытой вкладки.
-
-**Estimated:** 2-3 недели.
+**Status:** v1.6.0 MVP shipped (commit `e50c310` на https://github.com/crosspostly/autrau-desktop).
+Полный план в Obsidian; v1.6.1 (PyInstaller sidecar) и v1.6.2 (polish + GitHub Actions) — следующие.
 
 **См.:** `C:\obsidian\04_Knowledge\projects\autrau\v1.6-tauri-plan.md`
+**См.:** `C:\Users\varsm\OneDrive\Desktop\projects\autrau-desktop\README.md`
 
 ---
 
