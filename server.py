@@ -63,6 +63,7 @@ import tools.update as upd  # noqa: E402
 import tools.cleanup as clean  # noqa: E402
 import tools.favorites as fav  # noqa: E402
 import tools.translation as tr  # noqa: E402
+import tools.yt_dlp as ytdlp  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -543,6 +544,143 @@ async def api_transcript_export(name: str, format: str = "srt") -> Any:
             "Content-Disposition": f'attachment; filename="{out_name}"',
             "Cache-Control": "no-store",
         },
+    )
+
+
+# ---- yt-dlp: download audio from URL → transcribe (v1.5.7) ----
+
+@app.get("/api/yt-dlp/info")
+async def api_yt_dlp_info(url: str) -> dict:
+    """Get video metadata (title, duration, thumbnail) without downloading.
+
+    Query: `?url=<video_url>`
+    Returns: `{title, duration, thumbnail, uploader, webpage_url}`
+    """
+    if not url or not url.strip():
+        raise HTTPException(400, "url обязателен")
+    ok, why = ytdlp.is_available()
+    if not ok:
+        raise HTTPException(412, why)
+    try:
+        return ytdlp.probe(url.strip())
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/yt-dlp")
+async def api_yt_dlp(payload: dict) -> Any:
+    """Download audio from URL → transcribe (SSE stream with progress).
+
+    Body: {url, language?, provider?, model?, device?, format?}
+    SSE events:
+      - {type: "info", payload: {title, duration}}
+      - {type: "downloading", percent: int}
+      - {type: "transcribing", percent: int}
+      - {type: "done", payload: {text, file, segments, translation, ...}}
+      - {type: "error", payload: "..."}
+    """
+    from tools import yt_dlp as _ytdlp  # avoid shadowing
+    url = (payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url обязателен")
+    language = payload.get("language") or cfg.get("language", "ru")
+    p_name = payload.get("provider") or cfg.get("provider")
+    m_name = payload.get("model") or cfg.get("model")
+    dev = payload.get("device") or cfg.get("device", "cpu")
+    fmt = (payload.get("format") or "txt").lower()
+
+    ok, why = _ytdlp.is_available()
+    if not ok:
+        raise HTTPException(412, why)
+
+    # Validate provider/model
+    try:
+        p = registry.get(p_name)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{p_name}' не найден")
+    if not p.is_available()[0]:
+        raise HTTPException(412, p.is_available()[1] or "Провайдер недоступен")
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def _enqueue(kind: str, percent: int, payload: Any) -> None:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, (kind, percent, payload))
+        except RuntimeError:
+            pass
+
+    def producer() -> None:
+        tmp_dir = Path(tempfile.gettempdir()) / f"autrau-yt-{int(time.time())}"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            # 1. Probe
+            _enqueue("info", 0, _ytdlp.probe(url))
+            # 2. Download
+            _enqueue("downloading", 0, {"url": url})
+            audio_path = _ytdlp.download_audio(
+                url, tmp_dir,
+                on_progress=lambda pct, fn: _enqueue("downloading", pct, {"file": fn}),
+            )
+            # 3. Transcribe (reuse main provider pipeline)
+            _enqueue("transcribing", 0, {"file": str(audio_path)})
+
+            def on_seg(seg: Segment, percent: int) -> None:
+                _enqueue("transcribing", percent, seg.__dict__)
+            out = p.transcribe(audio_path, language, on_segment=on_seg)
+            try:
+                _info = out.get("info", {}) or {}
+                _info.setdefault("provider", p_name)
+                _info.setdefault("model", m_name)
+                _info["source_url"] = url
+                _path = clean.save_transcript(
+                    audio_path.name, out.get("text", ""), _info,
+                    segments=out.get("segments") or [],
+                )
+                if _path:
+                    tpath = _maybe_translate(out.get("text", ""), _info, target_path=_path)
+                    if tpath and tpath.is_file():
+                        try:
+                            raw = tpath.read_text(encoding="utf-8")
+                            lines = [ln for ln in raw.splitlines() if not ln.startswith("#")]
+                            out["translation"] = "\n".join(lines).strip()
+                            out["translation_provider"] = _info.get("translation_provider", "argos")
+                        except Exception:
+                            pass
+                    if _path:
+                        out["file"] = _path.name
+            except Exception as se:
+                log.warning("Не удалось сохранить yt-dlp транскрипт: %s", se)
+            _enqueue("done", 100, out)
+        except Exception as e:
+            log.exception("yt-dlp flow failed")
+            _enqueue("error", 0, f"{type(e).__name__}: {e}")
+        finally:
+            # Cleanup temp dir
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    loop.run_in_executor(None, producer)
+
+    async def stream():
+        try:
+            while True:
+                kind, percent, payload = await queue.get()
+                evt = json.dumps({"type": kind, "percent": percent, "payload": payload},
+                                 ensure_ascii=False)
+                yield f"data: {evt}\n\n"
+                if kind in ("done", "error"):
+                    break
+        except asyncio.CancelledError:
+            log.info("yt-dlp client disconnected")
+            raise
+
+    return StreamingResponse(
+        stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                 "Connection": "keep-alive"},
     )
 
 

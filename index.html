@@ -839,6 +839,20 @@
         <input type="file" id="file" multiple accept=".mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4,.aac,.mkv,.mov,.avi,.m4v,.3gp">
       </div>
 
+      <!-- URL → audio (yt-dlp) -->
+      <details style="margin-top: 12px;">
+        <summary style="cursor:pointer; user-select:none; padding:6px 0; color:var(--text-muted); font-size:13px;">
+          🔗 Или вставьте URL (YouTube, Vimeo, Twitter, ...)
+        </summary>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=..."
+                 style="flex:1; min-width: 200px; padding:8px 12px; border-radius:6px; background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+          <button class="secondary" id="urlPreview">🔍 Превью</button>
+          <button class="primary" id="urlTranscribe">🎙 Транскрибировать</button>
+        </div>
+        <div id="urlInfo" class="small" style="margin-top:8px; color:var(--text-muted);"></div>
+      </details>
+
       <!-- Очередь файлов -->
       <div id="queueSection" class="hidden" style="margin-top: 12px;">
         <div class="queue-header" style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
@@ -2425,6 +2439,157 @@
     });
     $('recStop').addEventListener('click', () => stopRecording());
     $('recCancel').addEventListener('click', () => stopRecording({ cancel: true }));
+
+    // ===== URL → transcribe (yt-dlp) =====
+    const urlInput = $('urlInput');
+    const urlPreviewBtn = $('urlPreview');
+    const urlTranscribeBtn = $('urlTranscribe');
+    const urlInfoEl = $('urlInfo');
+
+    async function fetchUrlInfo(url) {
+      const r = await fetch(`${API}/api/yt-dlp/info?url=${encodeURIComponent(url)}`);
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || `HTTP ${r.status}`);
+      }
+      return r.json();
+    }
+
+    if (urlPreviewBtn) {
+      urlPreviewBtn.addEventListener('click', async () => {
+        const url = (urlInput.value || '').trim();
+        if (!url) {
+          urlInfoEl.textContent = '⚠️ Введите URL';
+          return;
+        }
+        urlInfoEl.textContent = '⏳ Получаю информацию…';
+        try {
+          const info = await fetchUrlInfo(url);
+          const dur = info.duration ? `${Math.round(info.duration / 60)} мин` : '?';
+          urlInfoEl.innerHTML = `📺 <b>${info.title || '?'}</b> · ${dur} · ${info.uploader || '?'}`;
+        } catch (e) {
+          urlInfoEl.textContent = '❌ ' + (e.message || e);
+        }
+      });
+    }
+
+    async function transcribeUrl(url) {
+      // Reset UI
+      $('progressSection').classList.remove('hidden');
+      $('progressFill').style.width = '0%';
+      $('progressFill').classList.remove('error', 'done');
+      $('progressPct').textContent = '0%';
+      $('micIcon').className = 'mic-icon transcribing';
+      $('progressLabel').textContent = '🔗 Скачиваю аудио…';
+      $('progressDetail').textContent = url;
+      $('progressSubtitle').textContent = '';
+      $('transcriptionCard').classList.add('hidden');
+      $('liveText').textContent = '';
+      $('transcriptionTitle').textContent = '🎙️ Распознаётся в реальном времени';
+      $('resultTabs').classList.add('hidden');
+      $('result').classList.add('hidden');
+      $('result').value = '';
+      $('resultRu').classList.add('hidden');
+      $('resultRu').value = '';
+      $('resultActions').classList.add('hidden');
+      $('stats').textContent = '';
+      $('wfProgress').style.width = '0%';
+      setStatus('');
+      urlTranscribeBtn.disabled = true;
+
+      let lastInfo = null;
+      const r = await fetch(API + '/api/yt-dlp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          language: $('lang').value,
+          provider: state.activeProvider,
+          model: state.activeModel,
+        }),
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || `HTTP ${r.status}`);
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let final = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const chunk = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const evt = JSON.parse(line.slice(6));
+              const t = evt.type, p = evt.percent || 0;
+              if (t === 'info' && evt.payload && evt.payload.title) {
+                lastInfo = evt.payload;
+                $('progressSubtitle').textContent = `${evt.payload.title}${evt.payload.duration ? ' · ' + Math.round(evt.payload.duration / 60) + ' мин' : ''}`;
+                $('progressLabel').textContent = '🔗 Скачиваю аудио…';
+              } else if (t === 'downloading') {
+                $('progressLabel').textContent = '🔗 Скачиваю аудио…';
+                $('progressPct').textContent = (p || 0) + '%';
+                $('progressFill').style.width = (p || 0) + '%';
+              } else if (t === 'transcribing') {
+                $('progressLabel').textContent = '🎙 Распознаю…';
+                $('progressPct').textContent = (p || 0) + '%';
+                $('progressFill').style.width = (p || 0) + '%';
+                if (evt.payload && typeof evt.payload.text === 'string') {
+                  $('liveText').textContent = evt.payload.text;
+                }
+              } else if (t === 'done') {
+                final = evt.payload || {};
+                $('progressFill').style.width = '100%';
+                $('progressFill').classList.add('done');
+                $('progressPct').textContent = '100%';
+                $('micIcon').className = 'mic-icon done';
+              } else if (t === 'error') {
+                throw new Error(String(evt.payload || 'unknown error'));
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message && !e.message.includes('JSON')) throw e;
+            }
+          }
+        }
+      }
+      if (!final) throw new Error('Stream ended without done event');
+      // Show result (как у voice memos — с translation)
+      if (final.file) state.lastFileName = final.file;
+      showResultInCard(
+        final.text || '',
+        final.translation || '',
+        lastInfo ? `🔗 ${lastInfo.title}` : '🔗 Результат',
+      );
+      $('transcriptionCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      urlInfoEl.innerHTML = `✅ <b>${lastInfo ? lastInfo.title : 'Готово'}</b> — расшифровано`;
+    }
+
+    if (urlTranscribeBtn) {
+      urlTranscribeBtn.addEventListener('click', async () => {
+        const url = (urlInput.value || '').trim();
+        if (!url) {
+          urlInfoEl.textContent = '⚠️ Введите URL';
+          return;
+        }
+        try {
+          await transcribeUrl(url);
+        } catch (e) {
+          $('progressFill').classList.add('error');
+          $('micIcon').className = 'mic-icon error';
+          urlInfoEl.textContent = '❌ ' + (e.message || e);
+          setStatus('❌ ' + (e.message || e), 'error');
+        } finally {
+          urlTranscribeBtn.disabled = false;
+        }
+      });
+    }
 
     // ===== Result card: tabs (EN first) + Handy-style insertAtCursor =====
     // Для ГОЛОСОВЫХ: showResultInCard(text, translation, '🎙 Голосовая заметка')

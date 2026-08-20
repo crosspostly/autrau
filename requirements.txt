@@ -22,3 +22,9 @@ faster-whisper>=1.0,<2.0
 # argostranslate — local EN<->RU model (~336 MB total), 100+ language pairs available
 # langdetect — auto-detect source language (used by argos provider)
 # Both are installed automatically when the user clicks "📥 Install Argos" in the UI.
+
+# v1.5.7: yt-dlp — download audio from YouTube/Vimeo/Twitter/etc (~3 MB)
+# Required for `POST /api/yt-dlp` (URL → audio → transcribe).
+# If missing, the endpoint returns a helpful error.
+yt-dlp>=2024.0.0
+
