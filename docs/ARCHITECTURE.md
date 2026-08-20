@@ -28,9 +28,11 @@ graph TD
     S -->|"POST /api/yt-dlp/info, /api/yt-dlp"| Y["tools/yt_dlp.py<br/>YouTube/Vimeo/etc → wav<br/>(FFmpegExtractAudio)"]
     S -->|"POST /api/system-audio/{devices,start,stop}"| SA["tools/system_audio.py<br/>soundcard (WASAPI/Pulse/BlackHole)<br/>16kHz mono WAV"]
     S -->|"GET /api/transcripts/{n}/export"| EX["tools/exports.py<br/>SRT / VTT / JSON / TXT<br/>(читает .segments.json sidecar)"]
+    S -->|"voice/audio в чате"| TB["tools/telegram_bot.py<br/>(отдельный процесс)<br/>python-telegram-bot v21.11<br/>polling mode, 14 команд"]
     S -->|"фоновый цикл (6ч)"| CL
     S -->|"фоновый startup check"| TR
     S -->|"фоновый update check (каждые N ч)"| US
+    S -.->|"sidecar spawn"| EX2["autrau-desktop/<br/>(sibling Electron app)<br/>src/main.js<br/>Electron v32.3.3 + tray + hotkey"]
 ```
 
 ## Потоки данных
@@ -183,7 +185,9 @@ Persistent state в `data/update_state.json` (atomic write: `tempfile + os.repla
 | `exp.export_transcript()` | `tools/exports.py:190` | Главный dispatch: `(transcript_path, text, format) → (content, media_type)` |
 | `ustate.init()` / `get()` / `mark_checked()` / `mark_applied()` / `mark_dismissed()` / `should_notify()` | `tools/update_state.py:80` | Persistent update state с atomic write + RLock |
 | `cli.cmd_transcribe` / `cmd_batch` / `cmd_providers` / `cmd_models` / `cmd_status` / `cmd_health` | `tools/cli.py` | Subcommands для `python -m autrau.cli`. urllib + argparse, без requests dep. |
+| `bot.AutrauAPI` / `cmd_*` / `handle_voice` / `handle_audio` | `tools/telegram_bot.py:78` | Telegram agent bot (v1.7). sync urllib client + async ptb handlers. 14 команд, 13 FAQ patterns. Per-chat whitelist. |
 | `autrau` (package) | `autrau/__init__.py` | Shim для `python -m autrau` (запуск server.py) и `python -m autrau.cli` |
+| `autrau-desktop/src/main.js` | `autrau-desktop/src/main.js` | **Sibling Electron app** (v1.6.0). Main process: BrowserWindow + Tray + globalShortcut + child_process sidecar. 16 KB, ~250 строк логики. |
 
 Добавление нового провайдера = новый подкласс `Provider` + авторегистрация в `providers/__init__.py`; UI и API не меняются.
 

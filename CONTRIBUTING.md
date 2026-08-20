@@ -23,6 +23,7 @@
 
 ## Правила pull request
 
+- **Сделайте fork** репозитория и работайте в собственной копии (GitHub flow).
 - Работайте в отдельной ветке с осмысленным именем (`fix/...`, `feat/...`, `docs/...`), основной веткой является `main`.
 - Коммиты — небольшие, с описательными сообщениями; в одном PR — одна задача.
 - Перед PR обязательно: `python -m compileall -q providers tools server.py autrau`, smoke-тест сервера (`/health`, `/api/providers`, транскрибация тестового файла). Если добавили unit-тесты — `python -m pytest tests/ -v` (на v1.5.8: 10/10 в `tests/test_update_state.py` должен проходить).

@@ -23,6 +23,7 @@ pip install -r requirements-parakeet.txt   # Parakeet v3 (NVIDIA GPU + CUDA)
 pip install argostranslate langdetect      # Translation: Argos (v1.5.1+)
 pip install yt-dlp                  # v1.5.7: URL → транскрипция
 pip install soundcard               # v1.5.7: захват системного звука
+pip install "python-telegram-bot>=20.0,<22.0"   # v1.7: Telegram agent bot (opt-in)
 ```
 
 ## Команды
@@ -32,6 +33,7 @@ pip install soundcard               # v1.5.7: захват системного 
 | `python server.py` | Запуск сервера (UI + API) на `http://127.0.0.1:8000/` |
 | `python -m autrau` | То же самое через package shim (v1.5.7+) |
 | `python -m autrau.cli <sub>` | CLI-инструмент (transcribe, batch, providers, models, status, health) |
+| `python -m tools.telegram_bot` | **v1.7**: Telegram agent bot (нужен `telegram_bot_token` в config) |
 | `python -m tools.check` | Полная диагностика: Python, ffmpeg, зависимости, git, провайдеры, обновления |
 | `python -m tools.update --check` | Только проверить обновления (приложение + модели) |
 | `python -m tools.update --app` | Обновить приложение: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` |

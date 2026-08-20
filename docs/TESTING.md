@@ -7,6 +7,8 @@
 
 `tests/test_update_state.py` — **10/10 pass** (на v1.5.8): покрывает atomic write, thread-safety, state machine (`should_notify`, `mark_checked` сбрасывает dismissed при новой версии, `mark_applied` failures оставляют `available=True`).
 
+`tests/test_telegram_bot.py` — **32/32 pass** (на v1.7.1): FAQ patterns, ChatState, allowed_chat, html_escape/split_text, AutrauAPI error handling, `_read_server_logs`, diag formatters, env override, FAQ coverage.
+
 ## Что проверяет CI
 
 Файл `.github/workflows/ci.yml`, запускается на `push` и `pull_request` в `main`:

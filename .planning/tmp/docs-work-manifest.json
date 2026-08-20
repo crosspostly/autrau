@@ -1,19 +1,19 @@
 {
   "canonical_queue": [
-    {"type": "readme", "resolved_path": "README.md", "mode": "update", "preservation_mode": null, "wave": 1, "status": "pending"},
-    {"type": "architecture", "resolved_path": "docs/ARCHITECTURE.md", "mode": "update", "preservation_mode": null, "wave": 1, "status": "pending"},
-    {"type": "configuration", "resolved_path": "docs/CONFIGURATION.md", "mode": "update", "preservation_mode": null, "wave": 1, "status": "pending"},
-    {"type": "getting_started", "resolved_path": "docs/GETTING-STARTED.md", "mode": "update", "preservation_mode": null, "wave": 2, "status": "pending"},
-    {"type": "development", "resolved_path": "docs/DEVELOPMENT.md", "mode": "update", "preservation_mode": null, "wave": 2, "status": "pending"},
-    {"type": "testing", "resolved_path": "docs/TESTING.md", "mode": "update", "preservation_mode": null, "wave": 2, "status": "pending"},
-    {"type": "api", "resolved_path": "docs/API.md", "mode": "update", "preservation_mode": null, "wave": 2, "status": "pending"},
-    {"type": "contributing", "resolved_path": "CONTRIBUTING.md", "mode": "update", "preservation_mode": null, "wave": 2, "status": "pending"}
+    {"type": "readme", "resolved_path": "README.md", "mode": "supplement", "preservation_mode": null, "wave": 1, "status": "completed"},
+    {"type": "contributing", "resolved_path": "CONTRIBUTING.md", "mode": "supplement", "preservation_mode": null, "wave": 1, "status": "completed"},
+    {"type": "architecture", "resolved_path": "docs/ARCHITECTURE.md", "mode": "supplement", "preservation_mode": null, "wave": 1, "status": "completed"},
+    {"type": "configuration", "resolved_path": "docs/CONFIGURATION.md", "mode": "supplement", "preservation_mode": null, "wave": 1, "status": "completed"},
+    {"type": "getting_started", "resolved_path": "docs/GETTING-STARTED.md", "mode": "supplement", "preservation_mode": null, "wave": 1, "status": "completed"},
+    {"type": "development", "resolved_path": "docs/DEVELOPMENT.md", "mode": "supplement", "preservation_mode": null, "wave": 2, "status": "completed"},
+    {"type": "testing", "resolved_path": "docs/TESTING.md", "mode": "supplement", "preservation_mode": null, "wave": 2, "status": "completed"},
+    {"type": "api", "resolved_path": "docs/API.md", "mode": "supplement", "preservation_mode": null, "wave": 2, "status": "completed"},
+    {"type": "roadmap", "resolved_path": "docs/ROADMAP.md", "mode": "supplement", "preservation_mode": null, "wave": 2, "status": "completed"}
   ],
-  "review_queue": [
-    {"path": "docs/ROADMAP.md", "type": "hand-written", "status": "pending_review"}
-  ],
+  "review_queue": [],
   "gap_queue": [],
-  "created_at": "2026-08-20T12:00:00+03:00",
-  "scope_note": "v1.5.7+v1.5.8 cycle — CLI tool, yt-dlp, system audio, SRT/VTT export, auto-update, AGENTS.md, etc.",
-  "execution_mode": "parallel (gsd-doc-writer subagent available)"
+  "created_at": "2026-08-20T15:13:00Z",
+  "updated_at": "2026-08-20T15:14:00Z",
+  "scope": "v1.5.8 + v1.7 + v1.7.1 + v1.6.0 coverage",
+  "audit_result": "57/57 terms covered across 9 canonical docs (0 missing)"
 }
