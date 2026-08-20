@@ -1,14 +1,14 @@
 ---
 gsd_state:
-  version: 5
-  milestone: v1.7
+  version: 6
+  milestone: v1.6.0
   status: complete
-  current_phase: 7
-  current_phase_name: "Telegram agent bot"
+  current_phase: 8
+  current_phase_name: "Electron desktop wrapper (MVP)"
   last_updated: 2026-08-20
-previous_milestone: v1.5.8
-next_milestone: v1.6
-next_milestone_plan: "Tauri/Electron wrapper (portable .exe) — DEFERRED, plan in C:\\obsidian"
+previous_milestone: v1.7.1
+next_milestone: v1.6.1
+next_milestone_plan: "PyInstaller sidecar (autrau-server.exe ~30 MB)"
 ---
 
 # State — v1.6.0 (Electron desktop MVP) ✅ COMPLETE

@@ -193,13 +193,16 @@
 - Persistent state, background scheduler, UI banner, atomic apply, restart через
   `os.execv`. Подробности — в `docs/API.md` (раздел Self-update) и `docs/ARCHITECTURE.md`.
 
-### 🆕 Portable Windows .exe (v1.6) — в планах
-- **Статус:** 💭 идея
-- `autrau-desktop/` — Electron + PyInstaller обёртка (см. `C:\obsidian\04_Knowledge\projects\autrau\v1.6-tauri-plan.md`).
-- Нативное окно поверх всех приложений, глобальный хоткей (работает вне браузера), system tray.
-- System-wide вставка текста (`enigo` или `@nut-tree/nut-js`) вместо browser-only Selection API.
-- Dictation indicator как **отдельный webview** (не DOM overlay) — survives при свёрнутом главном окне.
-- Решение: **Electron** вместо Tauri (Node уже есть, не нужно 5 ГБ Rust + MSVC).
+### 🆕 Portable Windows .exe (v1.6) — **v1.6.0 MVP SHIPPED 2026-08-20**
+- **Статус:** ✅ v1.6.0 MVP shipped — отдельный репо [`crosspostly/autrau-desktop`](https://github.com/crosspostly/autrau-desktop) (commit `e50c310`)
+- **Что в MVP:** frameless window, system tray, **глобальный хоткей Alt+R** (system-wide),
+  single instance lock, sidecar management (spawn `python autrau/server.py` + waitForServer),
+  graceful shutdown, crash recovery, auto-start с Windows login.
+- **Dev-режим работает:** `cd autrau-desktop && npm install && npm start` — окно открывается, UI грузится, хоткей регистрируется.
+- **TODO v1.6.1:** PyInstaller sidecar build (`autrau-server.exe` ~30 МБ) — заменит Python venv.
+- **TODO v1.6.2:** `electron-builder` portable .exe (single .exe 150-200 МБ), GitHub Actions release, real icons.
+- **Решение:** **Electron** вместо Tauri (Node уже есть, не нужно 5 ГБ Rust + MSVC).
+- **План:** `C:\obsidian\04_Knowledge\projects\autrau\v1.6-tauri-plan.md`
 
 ## Не входит в планы (non-goals)
 

@@ -40,6 +40,7 @@
 - 🔊 **Системный звук** (v1.5.7) — захват того что играет в колонках (Windows WASAPI loopback): YouTube, Zoom, любой аудио в системе → расшифровка. UI: «🔊 Или захватить системный звук»
 - 📤 **Экспорт субтитров** (v1.5.6) — SRT / VTT / JSON / TXT из каждой расшифровки. Использует sidecar `<name>.segments.json` с таймкодами от ASR. Кнопка «📤 Экспорт ▾» в карточке результата.
 - 📱 **Telegram agent bot** (v1.7) — отдельный процесс, голосовые/аудио из чата → авто-расшифровка + EN-перевод. Команды `/status`, `/providers`, `/check`, `/update`, `/ask <вопрос>` (агент-режим для usability/QA). Whitelist chat_id по умолчанию. Запуск: `start_telegram_bot.bat` после `pip install 'python-telegram-bot>=20.0,<22.0'`.
+- 🖥 **Electron desktop** (v1.6) — отдельный репо [`crosspostly/autrau-desktop`](https://github.com/crosspostly/autrau-desktop). Нативное окно с always-on-top, system tray, **глобальный хоткей Alt+R** (работает вне браузера), single instance lock, sidecar к autrau-server. Dev-режим: `npm start`. Portable .exe → v1.6.2.
 
 ---
 
@@ -248,6 +249,9 @@ autrau/
 ├── start.bat              # 1-click запуск (Windows)
 ├── update.bat             # self-update (Windows)
 ├── start_telegram_bot.bat # 1-click запуск Telegram agent bot (v1.7, opt-in)
+
+# Sibling project (отдельный репо):
+# https://github.com/crosspostly/autrau-desktop (v1.6.0 Electron MVP)
 ├── publish.bat            # публикация в GitHub
 ├── requirements.txt
 ├── requirements-parakeet.txt
