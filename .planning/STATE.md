@@ -1,23 +1,29 @@
 ---
 gsd_state:
-  version: 1
-  milestone: v1.5
-  status: complete
-  current_phase: 4
-  current_phase_name: "Polish + docs"
+  version: 2
+  milestone: v1.5.7
+  status: in_progress
+  current_phase: 5
+  current_phase_name: "Vibe-inspired quick wins"
   last_updated: 2026-08-19
-next_milestone: v1.6
-next_milestone_plan: "portable Windows .exe (Tauri wrapper)"
+previous_milestone: v1.5
 ---
 
-# State — v1.5 (Handi-like UX) + v1.5.1–5 hot-fix series
+# State — v1.5.7 (Vibe-inspired quick wins) — IN PROGRESS
 
 ## Current Position
 
-**Milestone:** v1.5 ✅ COMPLETE
-**Hot-fix series:** v1.5.1, v1.5.2, v1.5.3, v1.5.4, v1.5.5 ✅ all shipped 2026-08-19
-**Push:** 9 коммитов запушены в `origin/main` (ef13358 → c5c8e41)
-**Next action:** v1.5.6 (small win: SRT/VTT/JSON export) → затем v1.6 (Tauri wrapper)
+**Milestone:** v1.5.7 «Vibe-inspired quick wins» 🔄 IN PROGRESS
+**Phase:** 5 — Vibe-inspired quick wins
+**Source:** `C:\obsidian\04_Knowledge\wiki\open-source-vibe-analysis.md`
+**Plan:** `.planning/phases/5-vibe-inspired/PLAN.md`
+
+**Done ранее:**
+- v1.5 milestone (Handi-like UX) ✅
+- v1.5.1-5 hot-fix series ✅
+- v1.5.6 SRT/VTT/JSON export ✅ (commit b18442d, в origin)
+
+**Next action:** 5.1 — CLI tool `python -m autrau.cli`
 
 ## Progress
 
@@ -57,15 +63,17 @@ next_milestone_plan: "portable Windows .exe (Tauri wrapper)"
 - [ ] 6.4: tests для format конвертеров
 - [ ] 6.5: docs/API.md + docs/ROADMAP.md
 
-### v1.6 — Portable Windows .exe (Tauri wrapper)
-- [ ] **Этап 1: research** — Tauri vs Electron vs PyWebView (решено: Tauri)
-- [ ] **Этап 2: scaffold** — `autrau-desktop/` рядом с `autrau/`, `npm create tauri-app`
-- [ ] **Этап 3: бандлинг** — Python сервер встроен как sidecar (PyInstaller → exe)
-- [ ] **Этап 4: native window** — `framed: false`, transparent, always-on-top toggle
-- [ ] **Этап 5: system tray** — icon + context menu (open/show/stop/exit)
-- [ ] **Этап 6: global hotkey** — Tauri `global_shortcut` plugin (работает в любом приложении)
-- [ ] **Этап 7: auto-start** — `tauri-plugin-autostart` + Windows startup folder
-- [ ] **Этап 8: portable сборка** — single `.exe` без установки, < 50 МБ без моделей
+### v1.6 — Portable Windows .exe (Electron + PyInstaller)
+- [ ] **Этап 1: scaffold** — `autrau-desktop/` рядом с `autrau/`, `npm init + i electron`
+- [ ] **Этап 2: sidecar** — `pyinstaller --onefile --name autrau-server server.py` (~30 МБ)
+- [ ] **Этап 3: native window** — `frame: false`, transparent, always-on-top toggle
+- [ ] **Этап 4: system tray** — icon + context menu (open/hide/always-on-top/exit)
+- [ ] **Этап 5: global hotkey** — `globalShortcut.register('Alt+R', ...)`
+- [ ] **Этап 6: auto-start** — `app.setLoginItemSettings({openAtLogin, openAsHidden})`
+- [ ] **Этап 7: portable .exe** — `electron-builder --win portable` (~180 МБ)
+- [ ] **Этап 8: polish** — иконки, splash, graceful shutdown, crash recovery
+
+Решение: **Electron вместо Tauri** (Node v24 уже есть, не нужно 5 ГБ Rust + MSVC).
 
 ### v2.0 — Telegram-бот (по запросу)
 - [ ] backend: `python-telegram-bot` или `aiogram`

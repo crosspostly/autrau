@@ -177,4 +177,97 @@ LibreTranslate публичный может быть медленным. MiniMa
 
 ---
 
-*Last updated: 2026-08-19*
+# Next milestone — v1.5.7+ (vibe-inspired)
+
+**Анализ:** `C:\obsidian\04_Knowledge\wiki\open-source-vibe-analysis.md`
+**Контекст:** Vibe (thewh1teagle, 7.1k⭐) — Tauri-shell + sona-раннер для офлайн-транскрибации.
+Изучили архитектуру, выделили 5 быстрых побед и 3 средних проекта для autrau.
+
+## Phase 5 — Vibe-inspired quick wins (v1.5.7) 🔄 NEXT
+
+**Goal:** Перенять низко висящие плоды из vibe: CLI tool, yt-dlp, system audio, Swagger UI.
+Не трогает core, не ломает API. Каждая фича — отдельный коммит.
+
+### 5.1 — CLI tool `python -m autrau.cli` (45 min)
+
+Использование autrau из терминала и скриптов:
+- `python -m autrau.cli transcribe file.mp3 --language ru --output out.txt`
+- `python -m autrau.cli providers` — список провайдеров
+- `python -m autrau.cli batch dir/` — пакетная обработка
+
+**Files:** `tools/cli.py` (новый), `setup.py`/`pyproject.toml` (entry point)
+**REQ:** REQ-v1.5.7-001
+
+### 5.2 — yt-dlp endpoint `POST /api/yt-dlp?url=...` (1 hour)
+
+Скачать аудио по URL → транскрибировать:
+- `POST /api/yt-dlp` body `{url, language?, model?}` → скачивает, транскрибирует, возвращает результат
+- `GET /api/yt-dlp/info?url=...` → title, duration, thumbnail (UI preview)
+- UI: новая кнопка «🔗 Из URL» рядом с «📁 Файл»
+
+**Files:** `server.py` (endpoint), `tools/yt_dlp.py` (helper), `index.html` (UI)
+**Dep:** `yt-dlp` (~10 МБ)
+**REQ:** REQ-v1.5.7-002
+
+### 5.3 — System audio loopback (Windows WASAPI) (2 hours)
+
+Расшифровка того что играет в колонках (YouTube/Zoom/etc):
+- `POST /api/system-audio/start` → начинает захват системного звука
+- `POST /api/system-audio/stop` → стоп, транскрибировать
+- Использует `soundcard` (PyPI) или `pyaudiowpatch` для Windows WASAPI loopback
+
+**Files:** `tools/system_audio.py` (новый), `server.py` (endpoints)
+**Note:** Windows only initially, macOS/Linux в v1.6+
+**REQ:** REQ-v1.5.7-003
+
+### 5.4 — Swagger UI `/docs` (10 min)
+
+FastAPI уже включает Swagger из коробки. Просто проверить что `/docs` работает.
+**Files:** `server.py` (проверить, что app определён через `FastAPI()`, не `__call__`)
+**REQ:** REQ-v1.5.7-004
+
+### 5.5 — AGENTS.md update (30 min)
+
+Скопировать паттерн из vibe + добавить autrau-специфичное:
+- uv для скриптов (PEP 723)
+- plans/<name>/<name>_NNN.py для валидации
+- pnpm-аналог (autrau не использует)
+
+**Files:** `.planning/AGENTS.md`
+**REQ:** REQ-v1.5.7-005
+
+**Estimated:** 4-5 hours total.
+
+---
+
+## Phase 6 — Real auto-update (v1.5.8) 🔄 PENDING
+
+**Goal:** Доделать `auto_update_app` — реально качать и применять обновления.
+
+**Files:** `tools/update.py` (расширить), `server.py` (`/api/updates/app` background mode)
+**Механика:** при `auto_update_app=true` и наличии remote-обновления:
+- проверка раз в час (background timer)
+- если есть → `git pull --ff-only` + `pip install -U -r requirements.txt`
+- notification пользователю + кнопка «Перезапустить сейчас»
+
+**Estimated:** 2 hours.
+
+---
+
+## Phase 7 — Tauri wrapper (v1.6) 🔄 PENDING
+
+**Goal:** Portable Windows .exe через Tauri. Используем паттерн vibe:
+- `autrau-desktop/` (Electron + PyInstaller sidecar)
+- Dictation indicator как **отдельный webview** (не DOM overlay)
+- system-wide вставка через `enigo` или `@nut-tree/nut-js`
+- Real global hotkey (работает вне браузера)
+
+**Зачем:** настоящий Handy-style UX, не зависит от открытой вкладки.
+
+**Estimated:** 2-3 недели.
+
+**См.:** `C:\obsidian\04_Knowledge\projects\autrau\v1.6-tauri-plan.md`
+
+---
+
+*Last updated: 2026-08-19 23:55 — v1.5.7 план добавлен*
