@@ -787,13 +787,17 @@ FAQ = [
      "  • UI: разверните «🔊 Или захватить системный звук»\n"
      "  • API: <code>GET /api/system-audio/devices</code> → выбрать → "
      "<code>POST /api/system-audio/start</code> → ждать → <code>POST /api/system-audio/stop</code>"),
-    (r"(медленн|slow|тормоз|долго|hang)",
-     "🐌 Тормозит распознавание? Возможные причины:\n\n"
-     "  1. Провайдер: parakeet-onnx на DirectML быстрее faster-whisper на CPU\n"
-     "  2. Модель: large-v3 → small (10x быстрее, точность -5%)\n"
-     "  3. beam_size: 5 → 1 (быстрее, точность -2%)\n"
-     "  4. compute_type: auto → int8 (на CPU быстрее)\n\n"
-     "Покажи текущую конфигурацию: <code>/config</code>"),
+    (r"(медленн|slow|тормоз|долго|hang|краш|вылет|выруба|crash|выключа)",
+     "🐌 Тормозит/вылетает? Возможные причины:\n\n"
+     "  1. **whisper-cpp large-v3 нестабилен** на Windows с большими файлами (188+ МБ .webm → "
+     "0xc0000005 ACCESS_VIOLATION в pywhispercpp DLL → heap corruption 0xc0000374).\n"
+     "  2. **parakeet-onnx стабильнее** для файлов >50 МБ (default, не падает).\n"
+     "  3. **Модель**: large-v3 → small (10x быстрее, точность -5%).\n"
+     "  4. **beam_size**: 5 → 1 (быстрее, точность -2%).\n"
+     "  5. **compute_type**: auto → int8 (на CPU быстрее).\n\n"
+     "💡 Если 188+ МБ .webm/mp4 → <code>/config</code> сменить на <code>parakeet-onnx</code>, "
+     "или разрезать через ffmpeg:\n"
+     "<code>ffmpeg -i big.webm -f segment -segment_time 600 -c copy chunk_%03d.webm</code>"),
     (r"(не\s+работает|не\s+транскрибирует|error|ошибка|fail|не\s+получается)",
      "❌ Не работает? Попробуй:\n\n"
      "  1. <code>/check</code> — диагностика (Python, ffmpeg, провайдеры)\n"
