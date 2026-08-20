@@ -803,11 +803,11 @@
         <div class="preset-bar">
           <button class="preset-btn" data-preset="fast" id="presetFast">
             ⚡ Быстрая
-            <span class="preset-speed">tiny</span>
+            <span class="preset-speed">tiny · parakeet</span>
           </button>
           <button class="preset-btn" data-preset="balanced" id="presetBalanced">
             ⚖ Сбалансированная
-            <span class="preset-speed">tiny</span>
+            <span class="preset-speed">small · parakeet</span>
           </button>
           <button class="preset-btn" data-preset="thorough" id="presetThorough">
             🎯 Тщательная
@@ -1267,10 +1267,12 @@
 
     // ===== ПРЕСЕТЫ — обновляем лейблы под реально скачанные модели =====
     function updatePresetLabels() {
+      // Раньше `balanced: ['tiny']` бажил — ставил tiny вместо small/parakeet.
+      // Теперь: fast=tiny, balanced=small+parakeet, thorough=large-v3.
       const PRESET_KEYS = {
-        fast:     ['tiny'],
-        balanced: ['tiny'],
-        thorough: ['large-v3'],
+        fast:     ['tiny', 'parakeet-tdt-0.6b-v3'],
+        balanced: ['small', 'parakeet-tdt-0.6b-v3'],
+        thorough: ['large-v3', 'medium', 'parakeet-tdt-0.6b-v3'],
       };
       const PRESET_ICONS = { fast: '⚡', balanced: '⚖', thorough: '🎯' };
       const PRESET_NAMES  = { fast: 'Быстрая', balanced: 'Сбалансированная', thorough: 'Тщательная' };
@@ -1486,7 +1488,13 @@
 
 
     // Пресеты — выбор модели в 1 клик
-    const PRESET_KEYS = { fast: ['tiny'], balanced: ['tiny'], thorough: ['large-v3'] };
+    // Приоритет: small (whisper-cpp) → parakeet-tdt-0.6b-v3 (SOTA 2025-2026) для balanced.
+    // Раньше `balanced: ['tiny']` бажил — ставил tiny вместо small/parakeet.
+    const PRESET_KEYS = {
+      fast: ['tiny', 'parakeet-tdt-0.6b-v3'],
+      balanced: ['small', 'parakeet-tdt-0.6b-v3'],
+      thorough: ['large-v3', 'medium', 'parakeet-tdt-0.6b-v3'],
+    };
     document.querySelectorAll('.preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const preset = btn.dataset.preset;
