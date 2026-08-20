@@ -40,6 +40,11 @@ DEFAULTS: dict[str, Any] = {
     "libretranslate_url": "",           # empty = use public instance
     "libretranslate_key": "",           # optional API key
     "minimax_key": "",                  # empty = auto-discover from ~/.minimax/auth.json
+
+    # v1.7: Telegram agent bot
+    "telegram_bot_token": "",          # токен от @BotFather; пусто = бот не запустится
+    "telegram_allowed_chat_ids": [],   # whitelist chat_id; пусто = никому; "any" = всем (dev only)
+    "telegram_api_url": "",            # default http://127.0.0.1:8000
 }
 
 

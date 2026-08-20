@@ -1057,6 +1057,26 @@
         </div>
       </div>
 
+      <!-- Telegram agent bot (v1.7) -->
+      <div class="row" style="margin-top: 18px;">
+        <div style="flex: 1 1 100%; max-width: 460px; padding: 12px 14px; background:rgba(110, 231, 183, 0.06); border:1px solid var(--border); border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:8px; font-weight:600;">
+            <span style="font-size:18px;">📱</span>
+            <span>Telegram agent bot <span class="small" style="opacity:.6;">(v1.7)</span></span>
+          </div>
+          <div class="small" style="margin-top:6px; opacity:.85;">
+            Отдельный процесс (<code>start_telegram_bot.bat</code>). Голосовые и аудио из чата
+            → авто-расшифровка + EN-перевод. Команды: <code>/help</code>, <code>/status</code>,
+            <code>/providers</code>, <code>/check</code>, <code>/update</code>, <code>/ask &lt;вопрос&gt;</code>.
+          </div>
+          <div class="small" style="margin-top:6px; opacity:.75;">
+            Токен: <code>data/config.json → telegram_bot_token</code> (получить у <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>).
+            Whitelist: <code>telegram_allowed_chat_ids: [ваш chat_id]</code> (по умолчанию никого не пускает).
+            Установка: <code>pip install 'python-telegram-bot&gt;=20.0,&lt;22.0'</code>.
+          </div>
+        </div>
+      </div>
+
       <!-- Горячая клавиша для голосовых заметок -->
       <div class="row" style="margin-top: 18px;">
         <div style="flex: 1 1 100%; max-width: 460px;">

@@ -28,3 +28,9 @@ faster-whisper>=1.0,<2.0
 # If missing, the endpoint returns a helpful error.
 yt-dlp>=2024.0.0
 
+# v1.7: Telegram agent bot (optional, only needed for `start_telegram_bot.bat`).
+# Provides voice messages → auto-transcribe, commands, agent-mode /ask.
+# Install manually if you want the bot:
+#     pip install "python-telegram-bot>=20.0,<22.0"
+# Not in base requirements — bot is opt-in (needs TELEGRAM_BOT_TOKEN).
+

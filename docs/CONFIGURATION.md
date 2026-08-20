@@ -40,7 +40,10 @@ Autrau настраивается двумя способами: **файл ко
   "translation_fallback": "libretranslate",
   "libretranslate_url": "",
   "libretranslate_key": "",
-  "minimax_key": ""
+  "minimax_key": "",
+  "telegram_bot_token": "",
+  "telegram_allowed_chat_ids": [],
+  "telegram_api_url": ""
 }
 ```
 
@@ -65,6 +68,9 @@ Autrau настраивается двумя способами: **файл ко
 | `libretranslate_url` | string | `""` | **v1.5.** URL LibreTranslate. Пусто = `https://libretranslate.com/` (⚠️ мёртв в 2025). |
 | `libretranslate_key` | string | `""` | **v1.5.** API-ключ LibreTranslate (если self-hosted требует). |
 | `minimax_key` | string | `""` | **v1.5.** API-ключ MiniMax. Пусто = авто-поиск в `~/.minimax/auth.json`. |
+| `telegram_bot_token` | string | `""` | **v1.7.** Токен Telegram-бота от [@BotFather](https://t.me/BotFather). Пусто = `start_telegram_bot.bat` откажется стартовать с подсказкой. Можно переопределить через env `TELEGRAM_BOT_TOKEN`. |
+| `telegram_allowed_chat_ids` | list\|string | `[]` | **v1.7.** Whitelist chat_id пользователей. `[]` = бот блокирует всех; `[123, 456]` = только эти; строка `"any"` = пропускать всех (⚠️ только для dev); строка `"123,456"` = парсится как CSV. |
+| `telegram_api_url` | string | `""` | **v1.7.** URL autrau API для бота. Пусто = `http://127.0.0.1:8000`. Можно переопределить через env `TELEGRAM_API_URL`. |
 
 `cleanup_after_days` применяется фоновым циклом (каждые 6 часов) и при ручном `POST /api/cleanup`.
 

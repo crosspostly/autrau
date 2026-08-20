@@ -39,6 +39,7 @@
 - 🔗 **URL → транскрипция** (v1.5.7) — вставь YouTube / Vimeo / Twitter / 1500+ других URL → yt-dlp скачает аудио → autrau расшифрует. UI: collapsible «🔗 Или вставьте URL» в секции загрузки
 - 🔊 **Системный звук** (v1.5.7) — захват того что играет в колонках (Windows WASAPI loopback): YouTube, Zoom, любой аудио в системе → расшифровка. UI: «🔊 Или захватить системный звук»
 - 📤 **Экспорт субтитров** (v1.5.6) — SRT / VTT / JSON / TXT из каждой расшифровки. Использует sidecar `<name>.segments.json` с таймкодами от ASR. Кнопка «📤 Экспорт ▾» в карточке результата.
+- 📱 **Telegram agent bot** (v1.7) — отдельный процесс, голосовые/аудио из чата → авто-расшифровка + EN-перевод. Команды `/status`, `/providers`, `/check`, `/update`, `/ask <вопрос>` (агент-режим для usability/QA). Whitelist chat_id по умолчанию. Запуск: `start_telegram_bot.bat` после `pip install 'python-telegram-bot>=20.0,<22.0'`.
 
 ---
 
@@ -59,6 +60,7 @@
 | venv + база (fastapi, uvicorn, python-multipart, huggingface-hub) | `requirements.txt` | ✅ автоматически при первом запуске |
 | **Faster-Whisper** (провайдер по умолчанию) | `requirements.txt` | ✅ автоматически |
 | Whisper.cpp / Parakeet (NeMo) / Parakeet v3 (ONNX) | — | ✅ одной кнопкой «⬇ Установить провайдер» в UI |
+| **Telegram agent bot** (v1.7) | `pip install 'python-telegram-bot>=20.0,<22.0'` | ❌ вручную (opt-in, нужен токен) |
 
 Каждый запуск заново проверяет Python, ffmpeg, git, наличие зависимостей и статус всех провайдеров — если чего-то не хватает, показывает предупреждение до старта сервера.
 
@@ -162,6 +164,26 @@ update.bat
 
 В UI вкладка **🔄 Обновления** показывает новые коммиты и новые версии моделей; `/api/updates?stream=1` стримит прогресс. Проверяются **только скачанные на диск модели** (нескачанные ни на что не влияют, и не тратится время на десятки запросов к Hugging Face). Кнопка «⬇ Обновить приложение» делает то же, что `update.bat`.
 
+## 📱 Telegram agent bot (v1.7)
+
+```powershell
+pip install "python-telegram-bot>=20.0,<22.0"
+# 1. Создайте бота через @BotFather, получите токен
+# 2. В data/config.json:
+#    "telegram_bot_token": "123456:ABC...",
+#    "telegram_allowed_chat_ids": [ваш chat_id],  # узнать: /start → бот пришлёт chat_id
+# 3. Двойной клик по start_telegram_bot.bat
+```
+
+Бот как «агент для usability»:
+
+- 🎙 **Голосовое / аудио из чата** → скачивание → ffmpeg (ogg→wav) → `/transcribe` → ответ + EN-перевод
+- 📋 **Команды:** `/start`, `/help`, `/status`, `/providers`, `/config`, `/lang ru|en|auto`, `/favorites`, `/export srt|vtt|json|txt`, `/check` (диагностика), `/update` (проверка обновлений)
+- 🤖 **Агент-режим:** `/ask <вопрос>` или просто вопросительное сообщение (например «как установить argos?», «медленно работает», «не работает перевод») — бот матчит по 9 FAQ-паттернам и отвечает пошагово. Если не распознал — предлагает `/check` или `/status`.
+- 🔒 **Whitelist** по `chat_id` (пустой = блок всех; `"any"` = пропустить всех для dev; `[123, 456]` = whitelist). По умолчанию безопасно закрыт.
+
+Логи: `autrau-telegram-bot.out.log`.
+
 ## 🧹 Авто-очистка расшифровок
 
 В настройках есть поле «Удалять расшифровки старше N дней»:
@@ -212,7 +234,9 @@ autrau/
 │   ├── cli.py             # CLI: transcribe, batch, providers, models, status, health
 │   ├── yt_dlp.py          # YouTube/Vimeo/etc → аудио (v1.5.7)
 │   ├── system_audio.py    # WASAPI loopback — захват системного звука (v1.5.7)
-│   └── exports.py         # SRT/VTT/JSON/TXT форматтеры из segments (v1.5.6)
+│   ├── exports.py         # SRT/VTT/JSON/TXT форматтеры из segments (v1.5.6)
+│   ├── telegram_bot.py    # Telegram agent bot (v1.7): голосовые/аудио/команды/FAQ
+│   └── update_state.py    # persistent state для auto-update (v1.5.8)
 ├── data/                  # локальные данные (в .gitignore)
 │   ├── config.json        # конфигурация
 │   ├── update_state.json  # v1.5.8 — last_check / available / dismissed_version
@@ -223,6 +247,7 @@ autrau/
 ├── tests/                 # локальные тесты (gitignored)
 ├── start.bat              # 1-click запуск (Windows)
 ├── update.bat             # self-update (Windows)
+├── start_telegram_bot.bat # 1-click запуск Telegram agent bot (v1.7, opt-in)
 ├── publish.bat            # публикация в GitHub
 ├── requirements.txt
 ├── requirements-parakeet.txt
@@ -253,7 +278,10 @@ autrau/
   "translation_fallback": "libretranslate",
   "libretranslate_url": "",
   "libretranslate_key": "",
-  "minimax_key": ""
+  "minimax_key": "",
+  "telegram_bot_token": "",
+  "telegram_allowed_chat_ids": [],
+  "telegram_api_url": ""
 }
 ```
 

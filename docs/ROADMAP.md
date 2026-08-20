@@ -116,19 +116,28 @@
 - 10/10 unit-тестов в `tests/test_update_state.py` покрывают state machine
   (atomic write, should_notify, dismissed reset на новую версию, mark_applied failures).
 
-### 📱 Telegram-бот
-- **Статус:** идея · **Оценка:** крупная фича
-- Голосовые сообщения (`ogg`/`opus`) и аудиофайлы из чатов → расшифровка через
-  существующие провайдеры (faster-whisper / whisper-cpp / parakeet).
-- Лимиты: Bot API принимает файлы до **20 МБ** для ботов (50 МБ — через
-  `sendDocument` по ссылке для других ботов); длинные голосовые нужно резать на
-  куски и склеивать.
-- Команды: `/start`, `/transcribe` (reply на голосовое/аудио), `/lang ru|en|auto`,
-  `/status`, `/favorites`, `/export srt|vtt|json`.
-- Обмен с локальным сервером — через тот же `POST /transcribe`; бот как тонкая
-  прослойка.
-- Деплой: рядом с сервером (тот же хост), токен — в `.env`/конфиге, без внешних
-  зависимостей (python-telegram-bot или aiogram).
+### 📱 Telegram agent bot (v1.7)
+- **Статус:** ✅ сделано 2026-08-20
+- `tools/telegram_bot.py` + `start_telegram_bot.bat` — отдельный процесс,
+  использует `python-telegram-bot` v21.11. Голосовые и аудио из чата
+  → скачивает (через Telegram Bot API, до 20 МБ) → ffmpeg ogg→wav (если есть)
+  → `POST /transcribe` → ответ + EN-перевод.
+- **Команды:** `/start`, `/help`, `/status`, `/providers`, `/config`, `/lang ru|en|auto`,
+  `/favorites`, `/export srt|vtt|json|txt`, `/check` (полная диагностика через
+  `tools.check`), `/update` (проверка обновлений), `/ask <вопрос>` (agent-режим).
+- **Agent-режим:** эвристический FAQ (9 паттернов: argos / parakeet / youtube /
+  system audio / slow / not working / update / video / provider switch) +
+  предложение `/check` если не распознал. Freeform-вопросы с `?` или вопросительными
+  словами автоматически роутятся в `/ask`.
+- **Безопасность:** `telegram_allowed_chat_ids` whitelist (пустой = блок всех,
+  `any` = пропустить всех, список = whitelist, CSV-строка = whitelist). По умолчанию
+  никого не пускает — нужно явно добавить свой chat_id.
+- **Тесты:** 19/19 в `tests/test_telegram_bot.py` (FAQ patterns, ChatState,
+  allowed_chat, html_escape, split_text, AutrauAPI error handling).
+- **Запуск:** `pip install 'python-telegram-bot>=20.0,<22.0'`, получить токен
+  через [@BotFather](https://t.me/BotFather), положить в `data/config.json`
+  → `telegram_bot_token`, добавить свой chat_id в `telegram_allowed_chat_ids`,
+  запустить `start_telegram_bot.bat`. Лог: `autrau-telegram-bot.out.log`.
 
 ### 🖥 Серверный деплой (Linux/systemd)
 - **Статус:** идея · **Оценка:** средняя

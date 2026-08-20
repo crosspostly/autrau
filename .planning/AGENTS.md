@@ -8,7 +8,8 @@
 - **Стек:** Python 3.13, FastAPI, uvicorn, providers (Whisper.cpp, Faster-Whisper, Parakeet NeMo, Parakeet ONNX/DirectML)
 - **UI:** один файл `index.html`, vanilla JS, без сборки, тёмная тема
 - **CLI:** `python -m autrau.cli` (с v1.5.7) — терминальный интерфейс к тому же HTTP API
-- **Текущий milestone:** v1.5.7 — Vibe-inspired quick wins (CLI, yt-dlp, system audio, Swagger, AGENTS)
+- **Telegram bot:** `python -m tools.telegram_bot` (с v1.7) — отдельный процесс, использует python-telegram-bot v21.x async
+- **Текущий milestone:** v1.7 — Telegram agent bot (voice + commands + agent-mode FAQ)
 
 ## Обязательно к прочтению ПЕРЕД работой
 
@@ -184,6 +185,7 @@ python -m autrau.cli health
 - **OpenAPI JSON:** `http://localhost:8000/openapi.json`
 - **System audio:** `Get-NetTCPConnection -LocalPort 8000` to check server, then `curl /api/system-audio/devices` для loopback
 - **yt-dlp:** download в `tempfile.gettempdir() / f"autrau-yt-{int(time.time())}"`, удаляется в `finally`
+- **Telegram bot:** отдельный процесс, polling mode. Whitelist по `telegram_allowed_chat_ids` — пустой = блок. Token в `data/config.json` → `telegram_bot_token` или env `TELEGRAM_BOT_TOKEN`. Log: `autrau-telegram-bot.out.log`. Запуск: `start_telegram_bot.bat`
 
 ---
 

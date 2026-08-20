@@ -1,15 +1,17 @@
-# Roadmap — v1.5 (Handi-like UX)
+# Roadmap — Autrau (все версии)
 
 ## Overview
 
-| Phase | Name                              | Status      | REQ-IDs                  | Est. Time |
-|-------|-----------------------------------|-------------|--------------------------|-----------|
-| 1     | **Подготовка инфраструктуры**     | ✅ done      | REQ-v1.5-001, REQ-v1.5-002 | 30 min   |
-| 2     | **Горячие клавиши + голосовые**   | 🔄 next     | REQ-v1.5-003, REQ-v1.5-005 | 4-6 hours |
-| 3     | **Автоперевод**                   | 🔄 pending  | REQ-v1.5-004              | 2-3 hours |
-| 4     | **Polish + Docs**                 | 🔄 pending  | -                         | 1 hour   |
-
-**Total estimated:** 8-10 hours.
+| Phase | Name                              | Status      | Version | Est. Time |
+|-------|-----------------------------------|-------------|---------|-----------|
+| 1     | **Подготовка инфраструктуры**     | ✅ done      | v1.5    | 30 min   |
+| 2     | **Горячие клавиши + голосовые**   | ✅ done      | v1.5    | 4-6 hours |
+| 3     | **Автоперевод**                   | ✅ done      | v1.5    | 2-3 hours |
+| 4     | **Polish + Docs**                 | ✅ done      | v1.5    | 1 hour   |
+| 5     | **Vibe-inspired (CLI/yt-dlp/audio/Swagger)** | ✅ done | v1.5.7  | 1.5 hours |
+| 6     | **Real auto-update**              | ✅ done      | v1.5.8  | 1 hour   |
+| 7     | **Telegram agent bot**            | ✅ done      | v1.7    | 1.5 hours |
+| 8     | **Tauri/Electron wrapper**        | 🔄 deferred | v1.6    | 2-3 weeks |
 
 ---
 
@@ -270,12 +272,31 @@ FastAPI уже включает Swagger из коробки. Просто про
 
 ---
 
-## Phase 7 — Tauri wrapper (v1.6) 🔄 PENDING
+## Phase 7 — Telegram agent bot (v1.7) ✅ DONE (2026-08-20)
 
-**Goal:** Portable Windows .exe через Tauri. Используем паттерн vibe:
+**Goal:** Agent-бот в Telegram для usability/QA. Голосовые и аудио из чата
+→ авто-расшифровка. Команды `/status`, `/providers`, `/check`, `/update`, `/ask`.
+Whitelist chat_id по умолчанию (безопасный дефолт).
+
+**Status:** ✅ shipped. Plan: `.planning/phases/7-telegram-bot/PLAN.md`.
+
+**Стек:** `python-telegram-bot` v21.11.1 (async, polling mode). Бот — отдельный
+процесс, общается с autrau-server через HTTP API.
+
+**Sub-phases (7.1–7.7):** scaffold, whitelist, 11 команд, voice/audio handlers,
+agent mode (9 FAQ patterns), 19/19 tests, docs + UI.
+
+**Estimated actual:** 1.5 hours (включая тесты, docs, UI).
+
+---
+
+## Phase 8 — Tauri/Electron wrapper (v1.6) 🔄 DEFERRED
+
+**Goal:** Portable Windows .exe через Electron (Tauri отклонён — 5GB Rust toolchain
+ради 5-10MB savings нерентабельно). Используем паттерн vibe:
 - `autrau-desktop/` (Electron + PyInstaller sidecar)
 - Dictation indicator как **отдельный webview** (не DOM overlay)
-- system-wide вставка через `enigo` или `@nut-tree/nut-js`
+- system-wide вставка через `@nut-tree/nut-js` (кросс-платформенный)
 - Real global hotkey (работает вне браузера)
 
 **Зачем:** настоящий Handy-style UX, не зависит от открытой вкладки.
@@ -286,4 +307,4 @@ FastAPI уже включает Swagger из коробки. Просто про
 
 ---
 
-*Last updated: 2026-08-19 23:55 — v1.5.7 план добавлен*
+*Last updated: 2026-08-20 13:30 — Phase 7 (Telegram bot) added, Phase 8 (Tauri→Electron) renumbered*
