@@ -853,6 +853,21 @@
         <div id="urlInfo" class="small" style="margin-top:8px; color:var(--text-muted);"></div>
       </details>
 
+      <!-- System audio (loopback) — захват того что играет в колонках -->
+      <details style="margin-top: 12px;">
+        <summary style="cursor:pointer; user-select:none; padding:6px 0; color:var(--text-muted); font-size:13px;">
+          🔊 Или захватить системный звук (YouTube, Zoom, ...)
+        </summary>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+          <select id="sysAudioDevice" style="flex:1; min-width: 200px; padding:8px 12px; border-radius:6px; background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+            <option value="">(загрузка...)</option>
+          </select>
+          <button class="primary" id="sysAudioStart">⏺ Начать запись</button>
+          <button class="danger hidden" id="sysAudioStop">⏹ Стоп + расшифровать</button>
+        </div>
+        <div id="sysAudioInfo" class="small" style="margin-top:8px; color:var(--text-muted);"></div>
+      </details>
+
       <!-- Очередь файлов -->
       <div id="queueSection" class="hidden" style="margin-top: 12px;">
         <div class="queue-header" style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
@@ -2587,6 +2602,137 @@
           setStatus('❌ ' + (e.message || e), 'error');
         } finally {
           urlTranscribeBtn.disabled = false;
+        }
+      });
+    }
+
+    // ===== System audio (loopback) — захват того что играет в колонках =====
+    const sysAudioDevice = $('sysAudioDevice');
+    const sysAudioStart = $('sysAudioStart');
+    const sysAudioStop = $('sysAudioStop');
+    const sysAudioInfo = $('sysAudioInfo');
+
+    async function loadSysAudioDevices() {
+      try {
+        const r = await fetch(API + '/api/system-audio/devices');
+        const data = await r.json();
+        if (!data.available) {
+          sysAudioDevice.innerHTML = `<option value="">${data.reason || 'недоступно'}</option>`;
+          sysAudioStart.disabled = true;
+          return;
+        }
+        sysAudioDevice.innerHTML = data.devices
+          .map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        sysAudioStart.disabled = false;
+      } catch (e) {
+        sysAudioDevice.innerHTML = `<option value="">ошибка: ${e.message || e}</option>`;
+        sysAudioStart.disabled = true;
+      }
+    }
+    loadSysAudioDevices();
+
+    if (sysAudioStart) {
+      sysAudioStart.addEventListener('click', async () => {
+        const deviceId = parseInt(sysAudioDevice.value, 10);
+        try {
+          const r = await fetch(API + '/api/system-audio/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: deviceId }),
+          });
+          if (!r.ok) {
+            const t = await r.text();
+            throw new Error(t);
+          }
+          const j = await r.json();
+          sysAudioInfo.textContent = `⏺ Запись с «${j.device}» запущена (${j.elapsed_sec}s)`;
+          sysAudioStart.classList.add('hidden');
+          sysAudioStop.classList.remove('hidden');
+          setStatus('🔊 Захват системного звука активен', 'success');
+        } catch (e) {
+          sysAudioInfo.textContent = '❌ ' + (e.message || e);
+        }
+      });
+    }
+
+    if (sysAudioStop) {
+      sysAudioStop.addEventListener('click', async () => {
+        sysAudioStop.disabled = true;
+        sysAudioInfo.textContent = '⏳ Останавливаю и расшифровываю…';
+        $('progressSection').classList.remove('hidden');
+        $('progressFill').style.width = '0%';
+        $('progressFill').classList.remove('error', 'done');
+        $('progressPct').textContent = '0%';
+        $('micIcon').className = 'mic-icon transcribing';
+        $('progressLabel').textContent = '🎙 Расшифровываю записанное…';
+        $('progressSubtitle').textContent = '';
+        $('progressDetail').textContent = '';
+        $('transcriptionCard').classList.add('hidden');
+        $('result').classList.add('hidden');
+        $('resultRu').classList.add('hidden');
+        $('resultActions').classList.add('hidden');
+        setStatus('⏹ Останавливаю запись…', 'success');
+        try {
+          const r = await fetch(API + '/api/system-audio/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ save_to: 'voice-memos' }),
+          });
+          if (!r.ok) {
+            const t = await r.text();
+            throw new Error(t);
+          }
+          const reader = r.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let final = null;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buffer.indexOf('\n\n')) !== -1) {
+              const chunk = buffer.slice(0, idx);
+              buffer = buffer.slice(idx + 2);
+              for (const line of chunk.split('\n')) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  const evt = JSON.parse(line.slice(6));
+                  const t = evt.type, p = evt.percent || 0;
+                  if (t === 'info' && evt.payload) {
+                    $('progressLabel').textContent = '🎙 Расшифровываю…';
+                    $('progressSubtitle').textContent = `Источник: системный звук · ${(evt.payload.elapsed_sec || 0).toFixed(1)}s`;
+                  } else if (t === 'done') {
+                    final = evt.payload || {};
+                    $('progressFill').style.width = '100%';
+                    $('progressFill').classList.add('done');
+                    $('progressPct').textContent = '100%';
+                    $('micIcon').className = 'mic-icon done';
+                  } else if (t === 'error') {
+                    throw new Error(String(evt.payload || 'unknown'));
+                  }
+                } catch (e) { if (!(e instanceof SyntaxError)) throw e; }
+              }
+            }
+          }
+          if (!final) throw new Error('No done event');
+          if (final.file) state.lastFileName = final.file;
+          showResultInCard(
+            final.text || '',
+            final.translation || '',
+            '🔊 Системный звук',
+          );
+          $('transcriptionCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          sysAudioInfo.textContent = `✅ Расшифровано (${final.text ? final.text.length : 0} символов)`;
+        } catch (e) {
+          $('progressFill').classList.add('error');
+          $('micIcon').className = 'mic-icon error';
+          sysAudioInfo.textContent = '❌ ' + (e.message || e);
+          setStatus('❌ ' + (e.message || e), 'error');
+        } finally {
+          sysAudioStop.disabled = false;
+          sysAudioStart.classList.remove('hidden');
+          sysAudioStop.classList.add('hidden');
         }
       });
     }

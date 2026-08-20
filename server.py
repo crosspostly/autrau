@@ -64,6 +64,7 @@ import tools.cleanup as clean  # noqa: E402
 import tools.favorites as fav  # noqa: E402
 import tools.translation as tr  # noqa: E402
 import tools.yt_dlp as ytdlp  # noqa: E402
+import tools.system_audio as sysaudio  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -675,6 +676,178 @@ async def api_yt_dlp(payload: dict) -> Any:
                     break
         except asyncio.CancelledError:
             log.info("yt-dlp client disconnected")
+            raise
+
+    return StreamingResponse(
+        stream(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                 "Connection": "keep-alive"},
+    )
+
+
+# ---- System audio loopback (v1.5.7) ----
+
+# Single instance: только одна запись в один момент
+_sysaudio_recorder: Optional[sysaudio.SystemAudioRecorder] = None
+_sysaudio_lock = threading.Lock()
+
+
+@app.get("/api/system-audio/devices")
+async def api_system_audio_devices() -> dict:
+    """List available loopback devices (что можно захватить из колонок)."""
+    ok, why = sysaudio.is_available()
+    if not ok:
+        return {"available": False, "reason": why, "devices": []}
+    return {
+        "available": True,
+        "devices": sysaudio.list_loopback_devices(),
+    }
+
+
+@app.post("/api/system-audio/start")
+async def api_system_audio_start(payload: dict) -> dict:
+    """Start recording from a loopback device.
+
+    Body: {device_id: int (default 0)}
+    Returns: {started: true, device: "..."}
+    """
+    global _sysaudio_recorder
+    ok, why = sysaudio.is_available()
+    if not ok:
+        raise HTTPException(412, why)
+    device_id = int(payload.get("device_id") or 0)
+    with _sysaudio_lock:
+        if _sysaudio_recorder is not None:
+            raise HTTPException(409, "Recording already in progress. Stop first.")
+        try:
+            rec = sysaudio.SystemAudioRecorder(device_id=device_id)
+            rec.start()
+            _sysaudio_recorder = rec
+        except Exception as e:
+            raise HTTPException(500, f"Failed to start: {e}")
+    # wait a tiny bit to confirm thread is alive
+    time.sleep(0.1)
+    elapsed = _sysaudio_recorder.elapsed_sec() if _sysaudio_recorder else 0
+    if elapsed < 0.05:
+        # Thread died immediately
+        with _sysaudio_lock:
+            _sysaudio_recorder = None
+        raise HTTPException(500, "Recording thread died immediately. Проверьте что loopback-устройство доступно.")
+    devices = sysaudio.list_loopback_devices()
+    device_name = devices[device_id]["name"] if device_id < len(devices) else "?"
+    return {
+        "started": True,
+        "device": device_name,
+        "elapsed_sec": round(elapsed, 2),
+    }
+
+
+@app.post("/api/system-audio/stop")
+async def api_system_audio_stop(payload: dict) -> Any:
+    """Stop recording → transcribe → return SSE stream with progress.
+
+    Body: {language?, provider?, model?, device?, save_to?: "transcripts"|"voice-memos"}
+    SSE events: progress (transcribing) → done (with text/segments/translation) | error
+    """
+    global _sysaudio_recorder
+    with _sysaudio_lock:
+        rec = _sysaudio_recorder
+    if rec is None:
+        raise HTTPException(409, "No recording in progress")
+    wav_path = rec.stop()
+    with _sysaudio_lock:
+        _sysaudio_recorder = None
+    if wav_path is None or not wav_path.exists():
+        raise HTTPException(500, "Recording failed (no WAV produced)")
+
+    language = payload.get("language") or cfg.get("language", "ru")
+    p_name = payload.get("provider") or cfg.get("provider")
+    m_name = payload.get("model") or cfg.get("model")
+    dev = payload.get("device") or cfg.get("device", "cpu")
+    save_to = (payload.get("save_to") or "voice-memos").lower()
+
+    try:
+        p = registry.get(p_name)
+    except KeyError:
+        raise HTTPException(404, f"Провайдер '{p_name}' не найден")
+    if not p.is_available()[0]:
+        raise HTTPException(412, p.is_available()[1] or "Провайдер недоступен")
+
+    # Lazy-load если ещё не загружен
+    global _loaded_provider, _loaded_model, _loaded_device
+    if not (_loaded_provider == p_name and _loaded_model == m_name and _loaded_device == dev):
+        if not p.is_model_downloaded(m_name):
+            raise HTTPException(404, f"Модель {m_name} не скачана")
+        log.info("Lazy-loading %s/%s on %s …", p_name, m_name, dev)
+        loop0 = asyncio.get_event_loop()
+        await loop0.run_in_executor(None, lambda: p.load(m_name, device=dev))
+        _loaded_provider, _loaded_model, _loaded_device = p_name, m_name, dev
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def _enqueue(kind: str, percent: int, payload: Any) -> None:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, (kind, percent, payload))
+        except RuntimeError:
+            pass
+
+    def producer() -> None:
+        try:
+            _enqueue("info", 0, {"file": str(wav_path), "elapsed_sec": rec.elapsed_sec()})
+            out = p.transcribe(wav_path, language)
+            try:
+                _info = out.get("info", {}) or {}
+                _info.setdefault("provider", p_name)
+                _info.setdefault("model", m_name)
+                _info["source"] = "system-audio"
+                if save_to == "transcripts":
+                    _path = clean.save_transcript(
+                        "system_audio.wav", out.get("text", ""), _info,
+                        segments=out.get("segments") or [],
+                    )
+                else:
+                    _path = clean.save_voice_memo(
+                        out.get("text", ""), _info,
+                        segments=out.get("segments") or [],
+                    )
+                if _path:
+                    tpath = _maybe_translate(out.get("text", ""), _info, target_path=_path)
+                    if tpath and tpath.is_file():
+                        try:
+                            raw = tpath.read_text(encoding="utf-8")
+                            lines = [ln for ln in raw.splitlines() if not ln.startswith("#")]
+                            out["translation"] = "\n".join(lines).strip()
+                            out["translation_provider"] = _info.get("translation_provider", "argos")
+                        except Exception:
+                            pass
+                    if _path:
+                        out["file"] = _path.name
+            except Exception as se:
+                log.warning("Не удалось сохранить system-audio транскрипт: %s", se)
+            _enqueue("done", 100, out)
+        except Exception as e:
+            log.exception("system-audio transcribe failed")
+            _enqueue("error", 0, f"{type(e).__name__}: {e}")
+        finally:
+            try:
+                wav_path.unlink()
+            except OSError:
+                pass
+
+    loop.run_in_executor(None, producer)
+
+    async def stream():
+        try:
+            while True:
+                kind, percent, payload = await queue.get()
+                evt = json.dumps({"type": kind, "percent": percent, "payload": payload},
+                                 ensure_ascii=False)
+                yield f"data: {evt}\n\n"
+                if kind in ("done", "error"):
+                    break
+        except asyncio.CancelledError:
+            log.info("system-audio client disconnected")
             raise
 
     return StreamingResponse(
