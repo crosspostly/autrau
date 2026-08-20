@@ -30,6 +30,28 @@ def _run(cmd: list[str], cwd: Path = PROJECT_ROOT, timeout: int = 300) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def current_version() -> str:
+    """Текущий HEAD commit (short). 'unknown' если не git."""
+    try:
+        out = _run(["git", "rev-parse", "--short", "HEAD"], timeout=5)
+        if out["ok"] and out.get("stdout"):
+            return out["stdout"].strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
+def latest_version() -> Optional[str]:
+    """Latest origin/main commit (short). None если fetch failed."""
+    out = _run(["git", "ls-remote", "origin", "main"], timeout=15)
+    if not out["ok"]:
+        return None
+    sha = (out.get("stdout") or "").split("\n")[0].split()[0]
+    if not sha:
+        return None
+    return sha[:7]
+
+
 def app_pull(on_log: Optional[Callable[[str], None]] = None) -> dict:
     """git pull --ff-only. Returns {ok, summary}."""
     cb = on_log or (lambda m: None)

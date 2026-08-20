@@ -113,9 +113,13 @@ async def lifespan(app: FastAPI):
     global _loaded_lock
     _loaded_lock = asyncio.Lock()
     cfg.init()
+    # v1.5.8: persistent update state
+    _ustate.init()
     if cfg.get("check_updates_on_start"):
         log.info("Startup update check (background) …")
         asyncio.create_task(_startup_check())
+    # v1.5.8: periodic update check (если auto_update_app или просто показать баннер)
+    asyncio.create_task(_update_scheduler())
     asyncio.create_task(_cleanup_loop())
     # v1.5: проверка translation providers (с таймаутом, чтобы не зависнуть)
     asyncio.create_task(_translation_startup_check())
@@ -130,6 +134,63 @@ async def _startup_check() -> None:
             log.warning("App update available. Run update.bat or call /api/updates/app")
     except Exception as e:
         log.warning("Startup check failed: %s", e)
+    # v1.5.8: persist state
+    try:
+        from tools.update import current_version, latest_version
+        current = current_version()
+        latest = latest_version()
+        available = (latest is not None and current != "unknown" and current != latest)
+        _ustate.mark_checked(current, latest, available=available)
+    except Exception as e:
+        log.warning("Failed to update state: %s", e)
+
+
+async def _update_scheduler() -> None:
+    """Periodic background check (каждые update_check_interval_hours)."""
+    # First check через 30s (дать серверу прогреться)
+    await asyncio.sleep(30)
+    while True:
+        try:
+            interval_h = float(cfg.get("update_check_interval_hours", 6))
+            interval_s = max(60, int(interval_h * 3600))  # минимум 1 минута
+            log.debug("Update scheduler: next check in %ds (interval=%.1fh)",
+                      interval_s, interval_h)
+            await asyncio.sleep(interval_s)
+            # Check
+            from tools.update import current_version, latest_version
+            current = current_version()
+            latest = latest_version()
+            available = (latest is not None and current != "unknown" and current != latest)
+            _ustate.mark_checked(current, latest, available=available)
+            log.info("Periodic update check: current=%s latest=%s available=%s",
+                     current, latest, available)
+            # Auto-apply
+            if available and bool(cfg.get("auto_update_app", False)):
+                log.info("auto_update_app=true, applying update…")
+                from tools.update import app_pull, deps_upgrade
+                try:
+                    pull = app_pull()
+                    if pull.get("ok"):
+                        deps = deps_upgrade()
+                        if deps.get("ok"):
+                            _ustate.mark_applied(current, "ok")
+                            log.info("Update applied, restarting in 2s …")
+                            await asyncio.sleep(2)
+                            _os.execv(sys.executable, [sys.executable] + sys.argv)
+                        else:
+                            _ustate.mark_applied(current, "pip_failed")
+                            log.error("Auto-update pip failed: %s", deps.get("detail"))
+                    else:
+                        _ustate.mark_applied(current, "git_failed")
+                        log.error("Auto-update git pull failed: %s", pull.get("detail"))
+                except Exception as e:
+                    _ustate.mark_applied(current, "exception")
+                    log.exception("Auto-update failed: %s", e)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            log.warning("Update scheduler error: %s (retry in 5 min)", e)
+            await asyncio.sleep(300)
 
 
 async def _translation_startup_check() -> None:
@@ -1450,7 +1511,138 @@ async def api_updates(stream: int = 0) -> Any:
 
 @app.post("/api/updates/app")
 async def api_update_app() -> dict:
+    """Применить self-update (git pull + pip upgrade). DEPRECATED — use /api/updates/apply."""
     return upd.run_full_update()
+
+
+# ---- v1.5.8 — Real auto-update endpoints ----
+
+import os as _os  # for restart
+import threading as _threading
+from tools import update_state as _ustate
+
+_update_lock = _threading.Lock()  # single concurrent apply
+
+
+@app.get("/api/updates/state")
+async def api_updates_state() -> dict:
+    """Current update state (для UI banner + auto-apply logic).
+
+    Returns:
+        {
+            "current_version": "f843bdb",
+            "latest_version": "abc1234",
+            "available": true,
+            "should_notify": true,    # есть обновление И юзер не нажал Later
+            "dismissed_version": null,
+            "last_check": "2026-08-20T...",
+            "last_apply_at": null,
+            "last_apply_result": null,
+            "last_apply_version": null,
+            "check_error": null,
+            "auto_update_enabled": false  # из config
+        }
+    """
+    state = _ustate.get()
+    return {
+        **state,
+        "should_notify": _ustate.should_notify(),
+        "auto_update_enabled": bool(cfg.get("auto_update_app", False)),
+    }
+
+
+@app.post("/api/updates/check-now")
+async def api_updates_check_now() -> dict:
+    """Принудительная проверка обновлений (force check). Возвращает state."""
+    if not _update_lock.acquire(timeout=2):
+        raise HTTPException(409, "Update check already running")
+    try:
+        from tools.update import current_version, latest_version
+        current = current_version()
+        latest = latest_version()
+        if latest is None:
+            _ustate.mark_checked(current, None, available=False,
+                                  error="Failed to fetch origin (network?)")
+            return _ustate.get()
+        available = (current != "unknown" and current != latest)
+        _ustate.mark_checked(current, latest, available=available)
+        log.info("Update check: current=%s latest=%s available=%s", current, latest, available)
+        return _ustate.get()
+    finally:
+        _update_lock.release()
+
+
+@app.post("/api/updates/dismiss")
+async def api_updates_dismiss() -> dict:
+    """Юзер нажал 'Later' — скрыть banner до появления новой версии."""
+    state = _ustate.get()
+    latest = state.get("latest_version")
+    if latest:
+        _ustate.mark_dismissed(latest)
+    return {"ok": True, "dismissed_version": latest}
+
+
+@app.post("/api/updates/apply")
+async def api_updates_apply() -> dict:
+    """Apply update: git pull + pip upgrade. Saves state. Optionally restarts.
+
+    Returns immediately with {ok, new_version, restart: bool}.
+    Restart happens via _os.execv() на фоне — клиент увидит «server restarting» и обновит страницу.
+    """
+    if not _update_lock.acquire(timeout=2):
+        raise HTTPException(409, "Update apply already running")
+
+    from tools.update import current_version, app_pull, deps_upgrade
+    try:
+        current = current_version()
+        log.info("Apply update: current=%s, applying…", current)
+
+        # git pull
+        pull = app_pull()
+        if not pull.get("ok"):
+            _ustate.mark_applied(current, "git_failed")
+            raise HTTPException(500, f"git pull failed: {pull.get('detail', pull)}")
+
+        # pip install
+        deps = deps_upgrade()
+        if not deps.get("ok"):
+            _ustate.mark_applied(current, "pip_failed")
+            raise HTTPException(500, f"pip upgrade failed: {deps.get('detail', deps)}")
+
+        _ustate.mark_applied(current, "ok")
+
+        # Определить новую версию
+        new_version = current_version()
+
+        # Если auto_update_app — restart. Иначе — пусть юзер сам решит.
+        if cfg.get("auto_update_app", False):
+            log.info("Auto-update: restarting server in 1.5s …")
+            import threading as _t
+            def _restart_after():
+                time.sleep(1.5)
+                try:
+                    _os.execv(sys.executable, [sys.executable] + sys.argv)
+                except Exception as e:
+                    log.error("Restart failed: %s — exit so watchdog can pick up", e)
+                    _os._exit(0)
+            _t.Thread(target=_restart_after, daemon=True, name="autrau-restart").start()
+            return {
+                "ok": True,
+                "old_version": current,
+                "new_version": new_version,
+                "restart": True,
+                "restart_in_sec": 1.5,
+            }
+
+        # Manual mode — без restart, юзер сам решит
+        return {
+            "ok": True,
+            "old_version": current,
+            "new_version": new_version,
+            "restart": False,
+        }
+    finally:
+        _update_lock.release()
 
 
 # ---- Transcribe ----

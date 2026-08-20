@@ -783,6 +783,18 @@
       </div>
     </section>
 
+    <!-- Update banner (v1.5.8) — появляется когда available && !dismissed -->
+    <div id="updateBanner" class="hidden" style="margin-top:14px; padding:14px 18px; border-radius:10px; background:linear-gradient(135deg, rgba(56,178,172,0.18), rgba(99,179,237,0.18)); border:1px solid var(--accent-3); display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:240px;">
+        <div style="font-weight:600; color:var(--text); margin-bottom:2px;">🎉 Доступно обновление</div>
+        <div id="updateBannerText" class="small" style="color:var(--text-dim);">Проверяется…</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="secondary" id="updateLater">⏭ Позже</button>
+        <button class="primary" id="updateApply">⬇ Обновить</button>
+      </div>
+    </div>
+
     <!-- Provider & model selection -->
     <div class="card">
       <h2><span class="num">1</span> Выбор модели</h2>
@@ -1020,6 +1032,29 @@
         <button class="secondary" id="cleanupNow">🗑 Очистить сейчас</button>
         <span class="spacer"></span>
         <span class="small" id="cleanupStatus"></span>
+      </div>
+
+      <!-- Auto-update приложения (v1.5.8) -->
+      <div class="row" style="margin-top: 18px;">
+        <div style="flex: 1 1 100%; max-width: 460px;">
+          <label for="autoUpdateApp">
+            <input type="checkbox" id="autoUpdateApp" style="margin-right:6px;">
+            Автоматически обновлять приложение
+          </label>
+          <div class="small" style="margin-top:4px; opacity:.75;">
+            Сервер будет проверять обновления каждые <span id="updateIntervalLabel">6</span> ч.
+            При наличии — применит <code>git pull --ff-only</code> + <code>pip install -U</code> и перезапустится.
+            Если выключено — обновление увидите в баннере сверху, примените вручную.
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+            <label for="updateCheckInterval" style="font-size:12px; color:var(--text-dim);">Интервал (часов):</label>
+            <input type="number" id="updateCheckInterval" min="1" max="168" step="1"
+                   style="width:80px; padding:4px 8px; background:rgba(255,255,255,0.04); color:var(--text); border:1px solid var(--border); border-radius:4px;">
+            <button class="secondary" id="saveUpdateSettings">💾 Сохранить</button>
+            <span class="spacer"></span>
+            <span class="small" id="updateSettingsStatus"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Горячая клавиша для голосовых заметок -->
@@ -1856,6 +1891,42 @@
         st.textContent = days > 0
           ? `✅ сохранено: удалять старше ${days} дн.`
           : '✅ сохранено: авто-очистка выключена';
+      } catch (e) {
+        st.textContent = '❌ ' + e.message;
+      }
+    });
+
+    // ===== Auto-update settings (v1.5.8) =====
+    async function loadUpdateSettings() {
+      try {
+        const r = await fetch(API + '/api/config');
+        if (!r.ok) return;
+        const cfg = await r.json();
+        $('autoUpdateApp').checked = !!cfg.auto_update_app;
+        const interval = parseInt(cfg.update_check_interval_hours, 10) || 6;
+        $('updateCheckInterval').value = interval;
+        $('updateIntervalLabel').textContent = String(interval);
+      } catch {}
+    }
+    loadUpdateSettings();
+
+    $('saveUpdateSettings').addEventListener('click', async () => {
+      const st = $('updateSettingsStatus');
+      const checked = $('autoUpdateApp').checked;
+      const interval = Math.max(1, Math.min(168, parseInt($('updateCheckInterval').value, 10) || 6));
+      $('updateCheckInterval').value = interval;
+      st.textContent = 'сохраняю …';
+      try {
+        const r = await fetch(API + '/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            auto_update_app: checked,
+            update_check_interval_hours: interval,
+          }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        st.textContent = '✅ сохранено';
+        $('updateIntervalLabel').textContent = String(interval);
       } catch (e) {
         st.textContent = '❌ ' + e.message;
       }
@@ -2733,6 +2804,92 @@
           sysAudioStop.disabled = false;
           sysAudioStart.classList.remove('hidden');
           sysAudioStop.classList.add('hidden');
+        }
+      });
+    }
+
+    // ===== Update banner (v1.5.8) — auto-update notifications =====
+    const updateBanner = $('updateBanner');
+    const updateBannerText = $('updateBannerText');
+    const updateApplyBtn = $('updateApply');
+    const updateLaterBtn = $('updateLater');
+
+    async function checkUpdateState() {
+      try {
+        const r = await fetch(API + '/api/updates/state');
+        if (!r.ok) return;
+        const s = await r.json();
+        if (s.should_notify && s.available) {
+          updateBannerText.innerHTML = `Текущая: <code>${s.current_version || '?'}</code> · Доступна: <code>${s.latest_version || '?'}</code>`;
+          updateBanner.classList.remove('hidden');
+        } else {
+          updateBanner.classList.add('hidden');
+        }
+      } catch (e) {
+        // Тихо скрываем — банер не критичный
+        updateBanner.classList.add('hidden');
+      }
+    }
+    checkUpdateState();
+    // Polling каждые 30s
+    setInterval(checkUpdateState, 30 * 1000);
+
+    if (updateLaterBtn) {
+      updateLaterBtn.addEventListener('click', async () => {
+        try {
+          await fetch(API + '/api/updates/dismiss', { method: 'POST' });
+          updateBanner.classList.add('hidden');
+        } catch (e) {
+          setStatus('❌ ' + (e.message || e), 'error');
+        }
+      });
+    }
+
+    if (updateApplyBtn) {
+      updateApplyBtn.addEventListener('click', async () => {
+        if (!confirm('Применить обновление? Сервер может перезапуститься (если включён auto_update_app), или потребуется ручной restart.')) return;
+        updateApplyBtn.disabled = true;
+        updateLaterBtn.disabled = true;
+        setStatus('⬇ Применяю обновление…', 'success');
+        try {
+          const r = await fetch(API + '/api/updates/apply', { method: 'POST' });
+          if (!r.ok) {
+            const t = await r.text();
+            throw new Error(t);
+          }
+          const j = await r.json();
+          if (j.restart) {
+            setStatus(`✅ Обновлено ${j.old_version} → ${j.new_version}. Сервер перезапускается через ${j.restart_in_sec}s…`, 'success');
+            updateBannerText.innerHTML = '🔄 Сервер перезапускается…';
+            // Poll пока сервер не вернётся
+            let attempts = 0;
+            const waitForServer = async () => {
+              attempts++;
+              try {
+                const r2 = await fetch(API + '/health', { cache: 'no-store' });
+                if (r2.ok) {
+                  setStatus(`✅ Готово! Версия: ${j.new_version}`, 'success');
+                  setTimeout(() => location.reload(), 2000);
+                  return;
+                }
+              } catch {}
+              if (attempts > 60) {  // 60 * 2s = 2 min max
+                setStatus('⚠️ Сервер не отвечает. Перезагрузите вручную.', 'error');
+                return;
+              }
+              setTimeout(waitForServer, 2000);
+            };
+            setTimeout(waitForServer, 3000);
+          } else {
+            setStatus(`✅ Обновлено ${j.old_version} → ${j.new_version}. Перезапустите сервер для применения.`, 'success');
+            updateBanner.classList.add('hidden');
+            updateApplyBtn.disabled = false;
+            updateLaterBtn.disabled = false;
+          }
+        } catch (e) {
+          setStatus('❌ ' + (e.message || e), 'error');
+          updateApplyBtn.disabled = false;
+          updateLaterBtn.disabled = false;
         }
       });
     }

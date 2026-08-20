@@ -36,7 +36,11 @@
 | `GET` | `/api/translate/providers` | Какие провайдеры перевода доступны прямо сейчас |
 | `POST` | `/api/translate/install-argos` | Установить `argostranslate`+`langdetect`+обе модели en_ru/ru_en в фоне |
 | `GET` | `/api/updates` | Проверка обновлений (JSON; `?stream=1` — SSE-прогресс) |
-| `POST` | `/api/updates/app` | Self-update: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` |
+| `POST` | `/api/updates/app` | Self-update: `git pull --ff-only` + `pip install --upgrade -r requirements.txt` (DEPRECATED → use `/api/updates/apply`) |
+| `GET` | `/api/updates/state` | Persistent state: `current/latest/available/should_notify/auto_update_enabled` (v1.5.8) |
+| `POST` | `/api/updates/check-now` | Force check: обновляет state без auto-apply (v1.5.8) |
+| `POST` | `/api/updates/dismiss` | Dismiss banner для текущей `latest_version` (v1.5.8) |
+| `POST` | `/api/updates/apply` | Apply update: git pull + pip upgrade. Если `auto_update_app=true` → restart через `os.execv` (v1.5.8) |
 | `POST` | `/api/model/download` | Скачать модель (SSE-прогресс) |
 | `GET` | `/api/model/check` | Проверить обновление одной модели |
 | `POST` | `/api/provider/load` | Загрузить провайдера+модель в память |

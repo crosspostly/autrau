@@ -240,17 +240,33 @@ FastAPI уже включает Swagger из коробки. Просто про
 
 ---
 
-## Phase 6 — Real auto-update (v1.5.8) 🔄 PENDING
+## Phase 6 — Real auto-update (v1.5.8) ✅ DONE (2026-08-20)
 
-**Goal:** Доделать `auto_update_app` — реально качать и применять обновления.
+**Goal:** Реальный auto-update с persistent state, background scheduler, UI banner.
 
-**Files:** `tools/update.py` (расширить), `server.py` (`/api/updates/app` background mode)
-**Механика:** при `auto_update_app=true` и наличии remote-обновления:
-- проверка раз в час (background timer)
-- если есть → `git pull --ff-only` + `pip install -U -r requirements.txt`
-- notification пользователю + кнопка «Перезапустить сейчас»
+**Sub-phases:**
+- 6.1 — `tools/update_state.py` (NEW) — persistent state в `data/update_state.json` (atomic writes, thread-safe) ✅
+- 6.2 — `tools/update.py` — добавлены `current_version()`, `latest_version()` ✅
+- 6.3 — server: 4 новых endpoint'а + `_update_scheduler()` background task + `_os.execv` restart ✅
+- 6.4 — UI: `#updateBanner` (gradient), polling каждые 30s, Apply с restart watcher ✅
+- 6.5 — Settings: `auto_update_app` checkbox + `update_check_interval_hours` input ✅
+- 6.6 — Tests: 10/10 unit тестов в `tests/test_update_state.py` ✅
+- 6.7 — Docs: docs/API.md + docs/CONFIGURATION.md ✅
 
-**Estimated:** 2 hours.
+**New endpoints:**
+- `GET /api/updates/state` — persistent state + should_notify + auto_update_enabled
+- `POST /api/updates/check-now` — force check (обновляет state)
+- `POST /api/updates/dismiss` — mark dismissed for current latest_version
+- `POST /api/updates/apply` — git pull + pip upgrade; restart если auto_update_app=true
+
+**Механика:**
+- `auto_update_app=false` (default): юзер видит баннер в UI → жмёт «Обновить» → server применяет → UI polling ждёт /health → reload
+- `auto_update_app=true`: background scheduler (каждые N часов) → если available, apply + restart через `os.execv` (через 2с delay)
+- Single instance lock — concurrent apply невозможен
+- State persistent в `data/update_state.json` (atomic write, RLock)
+- `should_notify()` учитывает `dismissed_version` — banner не показывается повторно до новой версии
+
+**E2E проверено:** apply 9.3s (no-op, current==latest), state корректно обновляется (last_apply_at, result, version, available→false).
 
 ---
 

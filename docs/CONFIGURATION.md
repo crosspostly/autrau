@@ -53,7 +53,8 @@ Autrau настраивается двумя способами: **файл ко
 | `beam_size` | int | `5` | Beam size (faster-whisper) |
 | `compute_type` | string | `auto` | Тип вычислений: `auto` \| `int8` \| `float16` \| `float32` |
 | `check_updates_on_start` | bool | `true` | Проверять обновления при старте сервера |
-| `auto_update_app` | bool | `false` | Автоматически обновлять приложение при старте *(зарезервировано)* |
+| `auto_update_app` | bool | `false` | **v1.5.8.** Автоматически применять обновления: `git pull --ff-only` + `pip install -U` + restart через `os.execv`. По умолчанию OFF (opt-in) — пользователь видит баннер в UI и жмёт «Обновить» вручную. |
+| `update_check_interval_hours` | int | `6` | **v1.5.8.** Как часто background scheduler проверяет обновления (минимум 1, максимум 168 = 1 неделя). |
 | `cleanup_after_days` | int | `0` | Авто-очистка расшифровок из `data/transcripts/`: `0` = не удалять; `N>0` = удалять старше N дней |
 | `hotkey` | string | `Ctrl+Shift+R` | **v1.5.** Сочетание клавиш для записи голосовой заметки. Настраивается в UI. Работает только когда вкладка в фокусе. Формат: `Ctrl+Shift+R` (модификаторы + клавиша через `+`). |
 | `voice_memo_dir` | string | `data/voice-memos/` | **v1.5.** Папка для голосовых заметок. Создаётся автоматически. |

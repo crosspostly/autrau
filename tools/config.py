@@ -24,7 +24,8 @@ DEFAULTS: dict[str, Any] = {
     "beam_size": 5,
     "compute_type": "auto",             # "auto" | "int8" | "float16" | "float32"
     "check_updates_on_start": True,
-    "auto_update_app": False,           # self-update on start
+    "auto_update_app": False,           # self-update on start (v1.5.8)
+    "update_check_interval_hours": 6,   # как часто проверять обновления в фоне (v1.5.8)
     "cleanup_after_days": 0,            # 0 = keep transcripts forever; N>0 = auto-delete older than N days
 
     # v1.5: Voice memos + hotkey
