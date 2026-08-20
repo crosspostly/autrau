@@ -12,6 +12,8 @@
 | Метод | Путь | Описание |
 |---|---|---|
 | `GET` | `/` | Web UI (HTML) |
+| `GET` | `/docs` | Swagger UI (auto-generated OpenAPI) |
+| `GET` | `/openapi.json` | OpenAPI schema (JSON) |
 | `GET` | `/health` | Статус сервера, версия, загруженная модель |
 | `GET` | `/api/providers` | Провайдеры, их модели, статус установки, активный выбор |
 | `GET` | `/api/config` | Текущая конфигурация (JSON) |

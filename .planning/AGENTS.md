@@ -7,7 +7,8 @@
 - **Что это:** локальный десктопный транскрибатор аудио/видео. FastAPI + vanilla JS. GitHub: https://github.com/crosspostly/autrau
 - **Стек:** Python 3.13, FastAPI, uvicorn, providers (Whisper.cpp, Faster-Whisper, Parakeet NeMo, Parakeet ONNX/DirectML)
 - **UI:** один файл `index.html`, vanilla JS, без сборки, тёмная тема
-- **Текущий milestone:** v1.5 — Handi-like UX (hotkey, voice memos, translation)
+- **CLI:** `python -m autrau.cli` (с v1.5.7) — терминальный интерфейс к тому же HTTP API
+- **Текущий milestone:** v1.5.7 — Vibe-inspired quick wins (CLI, yt-dlp, system audio, Swagger, AGENTS)
 
 ## Обязательно к прочтению ПЕРЕД работой
 
@@ -79,12 +80,22 @@
 | faster-whisper в дропдауне | Скрыт в UI явно (`p.name === 'faster-whisper'`) — но provider всё ещё `installed: true` |
 | Transcript filename без расширения | `tools/cleanup.py::save_transcript` сохраняет `.mp3.txt` (Phase 1) |
 | `0.0 МБ` для маленьких файлов | Backend отдаёт `size_kb`, UI показывает `КБ` если < 1 МБ (Phase 1) |
+| `python -m autrau.cli` → `No module named 'autrau'` | Создан `autrau/` package shim (`__init__.py` + `__main__.py` + `cli.py`) в v1.5.7 |
+| `tr.translate(text, source=src)` → TypeError | У Argos нет параметра `source`, используй `langdetect` + Cyrillic heuristic |
+| `Response` is not defined (в server.py) | Импортируй из `fastapi`: `from fastapi import Response` |
+| `IndentationError` после edit yt_dlp.py | Всегда проверяй что edit не сломал блок try/except/with |
+| `NameError: name 'Response'` после моих правок | Запусти `ast.parse()` и тест endpoint перед push |
+| System audio start hangs | soundcard thread держит GIL — sleep 0.1s + small chunk size решает |
 
 ## Architecture Quick Reference
 
 ```
 index.html            → UI (vanilla JS, inline)
 server.py             → FastAPI app, all endpoints, streaming via SSE
+autrau/               → package shim (v1.5.7)
+  __init__.py         → version marker
+  __main__.py         → `python -m autrau` → runs server.py
+  cli.py              → `python -m autrau.cli` → re-exports tools.cli
 providers/            → Transcription providers (4 files + base + __init__)
   base.py             → Abstract Provider class, ProviderInfo, Segment
   whisper_cpp.py      → pywhispercpp wrapper (CPU only)
@@ -93,16 +104,43 @@ providers/            → Transcription providers (4 files + base + __init__)
   parakeet_onnx.py    → ONNX/DirectML (any GPU/CPU)
 tools/
   config.py           → load/save config + defaults
-  cleanup.py          → save_transcript, list_transcripts, run_cleanup
+  cleanup.py          → save_transcript, list_transcripts, run_cleanup,
+                       save_voice_memo (segments sidecar as .segments.json)
   favorites.py        → star-marked files (protected from cleanup)
   check.py            → health check
   updates.py          → git pull + pip upgrade
+  translation.py      → argos / libretranslate / minimax providers
+  cli.py              → CLI (transcribe, batch, providers, models, status, health)
+  yt_dlp.py           → YouTube/Vimeo/etc → audio (v1.5.7)
+  system_audio.py     → WASAPI loopback (v1.5.7)
+  exports.py          → SRT/VTT/JSON/TXT export from segments (v1.5.6)
 data/                 → gitignored
   config.json         → user config
-  transcripts/        → saved .txt files (with source ext like .mp3.txt)
+  transcripts/        → saved .txt files + .segments.json sidecars (v1.5.6+)
+  voice-memos/        → voice memos + .segments.json sidecars
   models/             → downloaded model files
   favorites.json      → starred files
 ```
+
+## CLI Quick Reference (v1.5.7+)
+
+```bash
+# Server-side Python (использует .venv, не WindowsApps stub)
+.\.venv\Scripts\python.exe -m autrau.cli health
+.\.venv\Scripts\python.exe -m autrau.cli status
+.\.venv\Scripts\python.exe -m autrau.cli providers
+.\.venv\Scripts\python.exe -m autrau.cli models --provider parakeet-onnx
+.\.venv\Scripts\python.exe -m autrau.cli transcribe data\test_ru.mp3 -o out.txt
+.\.venv\Scripts\python.exe -m autrau.cli batch data\ --pattern "*.{mp3,wav}" -o out/
+
+# Server start (то же что start.bat, но через package)
+.\.venv\Scripts\python.exe -m autrau
+
+# Без venv (system Python, если есть зависимости)
+python -m autrau.cli health
+```
+
+**Override API URL:** `AUTRAU_API=http://localhost:9000 python -m autrau.cli status`
 
 ## Workflow per Phase
 
@@ -139,9 +177,13 @@ data/                 → gitignored
 - **Server logs:** `autrau-server.out.log` и `autrau-server.err.log` в корне репо
 - **Config:** `data/config.json` — локальный, можно смотреть текущие настройки юзера
 - **Models dir:** `data/models/<provider>/<model-name>/`
-- **Transcripts dir:** `data/transcripts/*.txt` (с source ext в имени)
-- **Voice memos dir:** `data/voice-memos/*.txt` (Phase 2)
+- **Transcripts dir:** `data/transcripts/*.txt` (с source ext в имени) + `*.segments.json` sidecars (v1.5.6+)
+- **Voice memos dir:** `data/voice-memos/*.txt` (Phase 2) + `*.segments.json` sidecars
 - **Test data:** `tests/_*.txt` (gitignored)
+- **Swagger UI:** `http://localhost:8000/docs` (auto-generated FastAPI OpenAPI)
+- **OpenAPI JSON:** `http://localhost:8000/openapi.json`
+- **System audio:** `Get-NetTCPConnection -LocalPort 8000` to check server, then `curl /api/system-audio/devices` для loopback
+- **yt-dlp:** download в `tempfile.gettempdir() / f"autrau-yt-{int(time.time())}"`, удаляется в `finally`
 
 ---
 
